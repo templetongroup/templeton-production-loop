@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "templeton-coding-loop"
+version = "0.1.0"
+description = "Human-gated GitHub + Hermes coding loop inspired by Finn-loop"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "The Templeton Group" }]
+
+[project.scripts]
+templeton-loop = "templeton_loop.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["templeton_loop*"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
