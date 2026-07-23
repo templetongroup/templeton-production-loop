@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://templeton.group/schemas/proof-manifest-v1.schema.json",
+  "title": "Templeton Proof Runner Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "source_paths", "strategy", "worker", "tasks"],
+  "properties": {
+    "version": {"const": 1},
+    "name": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._-]+$"},
+    "source_root": {"type": "string", "minLength": 1},
+    "source_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/relativePath"}
+    },
+    "strategy": {"$ref": "#/$defs/strategy"},
+    "worker": {"$ref": "#/$defs/route"},
+    "max_parallel": {"type": "integer", "minimum": 1, "maximum": 32, "default": 4},
+    "retries": {"type": "integer", "minimum": 0, "maximum": 1, "default": 0},
+    "env_allowlist": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/task"}
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {"pattern": "^/"},
+          {"pattern": "(^|/)\\.\\.(/|$)"},
+          {"pattern": "(^|/)\\.(/|$)"}
+        ]
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": {
+        "model": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "profile": {"type": "string", "minLength": 1},
+        "max_turns": {"type": "integer", "minimum": 1, "maximum": 200, "default": 40},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400, "default": 3600}
+      }
+    },
+    "strategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "prompt"],
+      "properties": {
+        "model": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "profile": {"type": "string", "minLength": 1},
+        "prompt": {"type": "string", "minLength": 1},
+        "max_turns": {"type": "integer", "minimum": 1, "maximum": 200, "default": 40},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400, "default": 3600}
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400, "default": 120}
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "brief", "expected_files", "verifiers"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+        "brief": {"type": "string", "minLength": 1},
+        "expected_files": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/relativePath"}
+        },
+        "verifiers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/verifier"}},
+        "model": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "profile": {"type": "string", "minLength": 1},
+        "max_turns": {"type": "integer", "minimum": 1, "maximum": 200},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "retries": {"type": "integer", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "hello-proof",
+  "source_root": "source",
+  "source_paths": ["README.md"],
+  "strategy": {
+    "model": "YOUR_STRATEGY_MODEL",
+    "provider": "YOUR_PROVIDER",
+    "prompt": "Produce a concise task plan and verification strategy.",
+    "max_turns": 12,
+    "timeout_seconds": 300
+  },
+  "worker": {
+    "model": "YOUR_WORKER_MODEL",
+    "provider": "YOUR_PROVIDER",
+    "max_turns": 24,
+    "timeout_seconds": 600
+  },
+  "max_parallel": 1,
+  "retries": 1,
+  "env_allowlist": ["PATH"],
+  "tasks": [
+    {
+      "id": "hello",
+      "brief": "Create hello.txt in the task output directory containing exactly: hello from Templeton",
+      "expected_files": ["hello.txt"],
+      "verifiers": [
+        {
+          "argv": ["python3", "-c", "from pathlib import Path; assert Path('hello.txt').read_text().strip() == 'hello from Templeton'"],
+          "timeout_seconds": 30
+        }
+      ]
+    }
+  ]
+}

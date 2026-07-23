@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "verifiers": [
+    {
+      "argv": ["python3", "-m", "pytest", "-q"],
+      "timeout_seconds": 900
+    }
+  ],
+  "protected_paths": [
+    ".git",
+    ".github/workflows",
+    ".templeton/loop.json",
+    "CODEOWNERS"
+  ],
+  "max_patch_bytes": 1000000,
+  "max_changed_files": 100,
+  "verifier_sandbox": {
+    "engine": "docker",
+    "image": "YOUR_IMAGE@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

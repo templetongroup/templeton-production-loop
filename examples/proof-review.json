@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "name": "templeton-v03-proof-review",
+  "source_root": "..",
+  "source_paths": [
+    "README.md",
+    "docs/plans/2026-07-23-proof-runner-v0.3.md",
+    "skills/templeton-loop-prove/SKILL.md"
+  ],
+  "strategy": {
+    "model": "anthropic/claude-opus-4.6",
+    "provider": "openrouter",
+    "prompt": "Develop one bounded review strategy for the supplied Templeton Proof Runner v0.3 plan and documentation. Map every acceptance criterion to observable documentation evidence, prioritize trust-boundary and runtime-claim accuracy, and tell workers to report uncertainty rather than invent implementation evidence. The source snapshot is read-only and all deliverables must be new artifacts in the task workspace.",
+    "max_turns": 6,
+    "timeout_seconds": 300
+  },
+  "worker": {
+    "model": "google/gemini-3-flash-preview",
+    "provider": "openrouter",
+    "max_turns": 8,
+    "timeout_seconds": 300
+  },
+  "max_parallel": 2,
+  "retries": 1,
+  "env_allowlist": [
+    "PATH"
+  ],
+  "tasks": [
+    {
+      "id": "contract-review",
+      "brief": "Review the supplied read-only plan and documentation for acceptance-criteria coverage. Create contract-review.md with the exact top-level heading '# Contract Review', a row for each AC-1 through AC-10, and a final section named '## Gaps'. Cite only paths present in the snapshot. Do not edit source files.",
+      "expected_files": [
+        "contract-review.md"
+      ],
+      "verifiers": [
+        {
+          "argv": [
+            "python3",
+            "-c",
+            "from pathlib import Path; p=Path('contract-review.md'); t=p.read_text(); assert t.startswith('# Contract Review\\n'); assert all(f'AC-{n}' in t for n in range(1, 11)); assert '## Gaps' in t"
+          ],
+          "timeout_seconds": 10
+        }
+      ]
+    },
+    {
+      "id": "safety-review",
+      "brief": "Independently review only the v0.3 safety and provenance claims in the supplied read-only files. Create safety-review.md with the exact top-level heading '# Safety Review' and explicit findings for trusted-plan status, no original-source edits, no merge/deploy authority, no auto-update, no global hooks, bounded retries, and no Ringer-derived code or assets. End with either 'Verdict: PASS' or 'Verdict: FAIL'. Do not edit source files.",
+      "model": "anthropic/claude-sonnet-4.5",
+      "expected_files": [
+        "safety-review.md"
+      ],
+      "verifiers": [
+        {
+          "argv": [
+            "python3",
+            "-c",
+            "from pathlib import Path; t=Path('safety-review.md').read_text(); required=['# Safety Review','trusted','source','merge','deploy','auto-update','global hooks','bounded','Ringer-derived','Verdict:']; assert all(s.lower() in t.lower() for s in required)"
+          ],
+          "timeout_seconds": 10
+        }
+      ],
+      "retries": 0
+    }
+  ]
+}

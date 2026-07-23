@@ -3,5 +3,6 @@
 __pycache__/
 .pytest_cache/
 .worktrees/
+.templeton-proof-runs/
 *.pyc
 dist/

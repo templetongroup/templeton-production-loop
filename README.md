@@ -1,171 +1,179 @@
 # Templeton Coding Loop
 
-A human-gated software factory adapted from [Finn-loop](https://github.com/finna/Finn-loop) for the tools Tony and Nikki already use:
+Templeton Coding Loop is a human-gated software delivery system for bounded GitHub changes and independently verified artifact work. It combines deterministic host-side control with least-authority model workers for Hermes Agent and OpenClaw.
 
-**idea → GitHub issue contract → Tony applies `loop:agent-ready` → Hermes/Nikki builds in an isolated worktree → a fresh Hermes reviewer posts a SHA-pinned verdict → Tony merges.**
+Version: **1.0.0**
 
-Linear is removed. GitHub Issues are the durable specification, approval queue, block state, and dependency surface. GitHub PRs remain the code-review and CI surface. Hermes supplies skills, isolated worktrees, fresh sessions, tools, delegation, session logs, and optional scheduling.
+## Editions
 
-## What was retained from Finn-loop
+The release generator produces two standalone private repositories:
 
-- spec quality is the bottleneck;
-- stable acceptance criteria (`AC-N`) and binding non-goals (`NG-N`);
-- one issue per PR;
-- an explicit human approval label before agents may build;
-- cooperative claim state;
-- builder and reviewer run in separate contexts;
-- review evidence is pinned to the exact PR head SHA;
-- required CI is mandatory for automated approval;
-- blocked and escalated work leaves the automated queue;
-- agents never merge or deploy;
-- bounded repair rounds prevent infinite agent arguments.
+- `templeton-coding-loop-hermes` — Hermes roles plus the artifact proof runner.
+- `templeton-coding-loop-openclaw` — OpenClaw-native coding-loop roles plus live artifact proof execution through an explicit adapter and a dedicated empty one-shot workspace.
 
-## Templeton tool mapping
+Each generated repository has a fixed runtime identity. Its installed CLI does not expose a runtime switch.
 
-| Finn-loop | Templeton loop |
-| --- | --- |
-| Linear issue | GitHub issue |
-| Linear `agent-ready` | GitHub `loop:agent-ready`, applied only by Tony/human |
-| Linear assignee + workflow state | GitHub assignee + `loop:building` |
-| Linear blocked relation | `loop:blocked` plus explicit `Blocked by #N` issue contract |
-| Claude `/loop` | `templeton-loop run ...` spawning one fresh Hermes session per pass |
-| Claude Code skill | Hermes profile skill |
-| Claude isolated session | Hermes `chat --worktree` fresh session |
-| Separate review loop | Fresh Hermes reviewer session, exact SHA pinned |
-| Slack control plane | Telegram/Hermes status output now; no shadow state |
+## Operating model
 
-## Components
-
-- `templeton-loop-spec` — interactive repository research and GitHub issue drafting.
-- `templeton-loop-build` — one repair or one issue-to-PR build pass.
-- `templeton-loop-review` — one fresh-context, SHA-pinned PR review pass.
-- `templeton-loop-status` — read-only operator queue and action list.
-- `templeton-loop` CLI — doctor, label bootstrap, deterministic queue selection, runtime-aware skill install, and bounded/persistent Hermes or OpenClaw runners.
-- `skills/` — Hermes-native role skills.
-- `skills-openclaw/` — OpenClaw-native role skills with explicit git-worktree isolation.
-- `scripts/build_exports.py` — creates shareable, checksummed Hermes and OpenClaw ZIP bundles.
-
-## Safety boundaries
-
-- `init` and `install-skills` are dry-run unless `--apply` is present.
-- A runner defaults to one pass. Persistent mode requires `--forever`.
-- One local builder process per repository is enforced with a file lock.
-- Each agent pass starts in a Hermes isolated git worktree.
-- The runner re-reads GitHub before selecting work; the skill re-reads before mutation.
-- Missing required CI prevents `loop:approved`.
-- Builders get two repair rounds; the third unresolved review becomes `loop:stuck` + `loop:needs-human-review`.
-- No loop role may merge, auto-merge, deploy, publish, purchase, or mutate production.
-- GitHub assignment is a cooperative lock, not an atomic distributed lease. Run only one builder loop per repository.
-
-## Install the CLI
-
-```bash
-cd /Users/ai/projects/templeton/coding-loop
-/Users/ai/.hermes/hermes-agent/venv/bin/python -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/templeton-loop --help
+```text
+idea
+  → GitHub issue contract
+  → pre-approval plan review
+  → human applies loop:agent-ready
+  → isolated staged build
+  → deterministic host validation and branch/PR effects
+  → fresh SHA-pinned review
+  → report-only QA
+  → human merge
 ```
 
-The explicit interpreter uses the installed Hermes Python 3.11 runtime; macOS `/usr/bin/python3` may still be Python 3.9 and is intentionally not used.
+The deterministic broker owns GitHub credentials and effects. Child agents receive only filtered source, bounded task context, and role-specific tools inside air-gapped Docker sandboxes. They cannot merge, deploy, publish, purchase, mutate production, or access operator credentials.
 
-Install the four skills into Nikki's Hermes profile:
+## Requirements
 
-```bash
-.venv/bin/templeton-loop install-skills --profile nikki
-.venv/bin/templeton-loop install-skills --profile nikki --apply
-```
+Common:
 
-The first command previews paths. The second changes profile-local state. Restart/reset the Nikki session after installing if an already-running session must see the new skills.
+- Python 3.11+
+- Git
+- GitHub CLI authenticated as the intended operator
+- Docker with a trusted worker image pinned by SHA-256 digest
+- a target GitHub repository with required CI configured
 
-## Initialize a target repository
+Runtime-specific:
 
-From any GitHub-backed local clone:
+- Hermes Agent for the Hermes edition
+- OpenClaw 2026.7.1 or newer for the OpenClaw edition
 
-```bash
-# Read-only preflight
-/path/to/coding-loop/.venv/bin/templeton-loop --json doctor --repo .
-
-# Preview label commands
-/path/to/coding-loop/.venv/bin/templeton-loop init --repo .
-
-# Create/update the loop labels
-/path/to/coding-loop/.venv/bin/templeton-loop init --repo . --apply
-
-# Read-only queue
-/path/to/coding-loop/.venv/bin/templeton-loop --json queue --repo .
-```
-
-`doctor` reports GitHub authentication, default branch, dirty-tree state, labels, and required branch checks. A repository with no required CI can use the loop, but every PR remains `loop:needs-human-review` rather than receiving `loop:approved`.
-
-## Daily use
-
-### 1. Create a spec
-
-Ask Nikki in the repository context to use `templeton-loop-spec`. She researches first, interviews for genuine product decisions, shows the full contract, and creates a GitHub issue carrying only `loop:spec-draft` after approval.
-
-Tony reads the issue and manually adds `loop:agent-ready`. This is the non-delegable build authorization.
-
-### 2. Run one safe builder pass
+## Install from a standalone repository
 
 ```bash
-/path/to/coding-loop/.venv/bin/templeton-loop run build --repo /path/to/repo --profile nikki
+python3.11 exports/validate_bundle.py
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+templeton-loop --help
 ```
 
-Preview the exact Hermes command without launching it:
+Validate before installing: installation and tests create files that are intentionally absent from the signed bundle manifest.
+
+## First-use sequence
+
+### 1. Inspect the target repository
 
 ```bash
-/path/to/coding-loop/.venv/bin/templeton-loop --json run build --repo /path/to/repo --dry-run
+templeton-loop doctor --repo /path/to/repo
+templeton-loop init --repo /path/to/repo
+templeton-loop init --repo /path/to/repo --apply
 ```
 
-### 3. Run one independent reviewer pass
+### 2. Install runtime skills
+
+Hermes edition:
 
 ```bash
-/path/to/coding-loop/.venv/bin/templeton-loop run review --repo /path/to/repo --profile nikki
+templeton-loop install-skills --profile templeton
+templeton-loop install-skills --profile templeton --apply
 ```
 
-### 4. Keep a watched loop open
-
-Only after one-pass use is proven on that repository:
+OpenClaw edition:
 
 ```bash
-/path/to/coding-loop/.venv/bin/templeton-loop run build --repo /path/to/repo --forever --interval 300
-/path/to/coding-loop/.venv/bin/templeton-loop run review --repo /path/to/repo --forever --interval 300
+templeton-loop install-skills --agent AGENT_ID
+templeton-loop install-skills --agent AGENT_ID --apply
 ```
 
-For a durable unattended worker, use a launch agent or Hermes scheduled job only after repository-specific one-pass proof. Keep build and review as separate fresh sessions. Do not schedule spec interviews.
+### 3. Configure least-authority workers
 
-## GitHub labels
+Hermes uses a dedicated `HERMES_HOME` and Docker terminal policy. OpenClaw uses one explicit sandboxed agent per role. See the edition README and `SECURITY.md`; runtime preflight fails closed if required settings are absent or drifted.
 
-| Label | Meaning |
-| --- | --- |
-| `loop:spec-draft` | issue awaiting human approval |
-| `loop:agent-ready` | human-approved contract |
-| `loop:building` | claimed by builder |
-| `loop:blocked` | human answer required |
-| `loop:awaiting-review` | PR needs fresh review |
-| `loop:approved` | SHA-pinned review + required CI passed |
-| `loop:changes-requested` | must-fix findings |
-| `loop:needs-human-review` | automated lane stopped |
-| `loop:stuck` | repair budget exhausted |
-
-## Verification
+### 4. Preview a role pass
 
 ```bash
-cd /Users/ai/projects/templeton/coding-loop
-.venv/bin/python -m pytest
-.venv/bin/python -m compileall -q templeton_loop tests
-.venv/bin/templeton-loop --help
+# Hermes edition
+templeton-loop run build --repo /path/to/repo --profile templeton --dry-run
+
+# OpenClaw edition
+templeton-loop run review --repo /path/to/repo --agent AGENT_ID --dry-run
+templeton-loop run qa --repo /path/to/repo --agent AGENT_ID --dry-run
 ```
 
-## Portable exports
+Then run one bounded pass without `--dry-run`. Watched mode is explicit through `--forever --interval SECONDS`; it is never enabled by installation.
+
+## Artifact proof runner
+
+Both editions can validate a trusted proof manifest, preview exact routing without model calls, and execute through a dedicated isolated runtime:
 
 ```bash
-cd /Users/ai/projects/templeton/coding-loop
-.venv/bin/python scripts/build_exports.py
+templeton-loop prove plan.json --lint
+templeton-loop prove plan.json --dry-run
+templeton-loop prove plan.json --run-root ./proof-runs
+
+# OpenClaw edition: run root must be the configured, existing, empty prove-agent workspace
+templeton-loop prove plan.json --agent templeton-prove --lint
+templeton-loop prove plan.json --agent templeton-prove --dry-run
+templeton-loop prove plan.json --agent templeton-prove --run-root /absolute/openclaw/empty-proof-workspace
 ```
 
-This produces separate checksummed Hermes and OpenClaw ZIP archives under `dist/`. The OpenClaw edition uses fresh `openclaw agent` session keys and OpenClaw-local skills; it does not invoke Hermes.
+Execution performs one strategy pass, concurrent isolated workers, independent containerized verification, and the manifest's bounded repair count. Every attempt and verifier result is preserved in a hash-chained ledger with a sealed digest inventory of artifacts, verifier output, and reports. The original source tree is inventoried before and after and is never the worker workspace. OpenClaw refuses non-empty run roots, preventing a later session from reaching prior-run evidence; archive and clear a completed workspace only through a separately reviewed operator action.
 
-## Attribution
+## Evidence
 
-This implementation uses the architecture and safety ideas of Alex Finn's MIT-licensed Finn-loop. It is a clean adaptation rather than a direct installation: Linear-specific state was replaced with GitHub Issues, Claude `/loop` was replaced with bounded fresh Hermes passes, and Templeton's explicit production/deployment approval gates were added.
+Runs write bounded, redacted evidence under the target repository's Git metadata directory or the selected proof run root. Evidence includes:
+
+- run and policy identity;
+- model route and provider-neutral outcome;
+- staged-tree and source inventories;
+- normalized findings and applicability;
+- verifier argv, exit code, duration, and bounded output;
+- retry lineage;
+- evidence freshness;
+- capability/eval coverage and health summaries;
+- append-only hash-chain fields.
+
+Evidence is proof of what the runner observed, not authority to merge or deploy.
+
+## Release integrity
+
+Build both editions:
+
+```bash
+python scripts/build_exports.py
+```
+
+After artifacts exist, verify that a fresh deterministic build is identical without replacing `dist/`:
+
+```bash
+python scripts/build_exports.py --check
+```
+
+`dist/SHA256SUMS` is a detached checksum list, not a self-authenticating signature. Obtain or approve its digest through an independent authenticated channel (for example, a reviewed private-repository commit, signed tag, or release attestation), then verify the archives **before** extraction or installation:
+
+```bash
+cd dist
+shasum -a 256 -c SHA256SUMS       # macOS
+# sha256sum -c SHA256SUMS          # Linux
+```
+
+Validate staged bundles:
+
+```bash
+python dist/stage/templeton-coding-loop-hermes-v1.0.0/exports/validate_bundle.py
+python dist/stage/templeton-coding-loop-openclaw-v1.0.0/exports/validate_bundle.py
+```
+
+The validator rejects missing, extra, altered, unsafe, or symlinked files and verifies `MANIFEST.json`, `MANIFEST.sha256`, version, runtime identity, skill inventory, and safety-contract markers. Internal manifests detect accidental or uncoordinated changes; they are not authenticity proofs. A `SHA256SUMS` file downloaded beside the archives is also insufficient unless its digest or signature was authenticated separately. For an authenticated repository checkout, you may additionally pin the externally reviewed manifest digest with `--expected-manifest-sha256 DIGEST`.
+
+## Development verification
+
+```bash
+python -m pytest -q
+python -m compileall -q templeton_loop tests scripts
+python scripts/build_exports.py
+git diff --check
+```
+
+## Governance and provenance
+
+Tony or another authorized human applies `loop:agent-ready`, reviews the resulting PR and evidence, and merges. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
+
+Templeton Coding Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
