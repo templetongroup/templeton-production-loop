@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -368,8 +369,11 @@ def agent_command(
     repo: Repo,
     role: str,
     candidate: Candidate,
+    runtime: str,
     profile: str,
+    agent: str,
     max_turns: int,
+    timeout: int,
 ) -> list[str]:
     if role == "build":
         skill = "templeton-loop-build"
@@ -385,30 +389,53 @@ def agent_command(
         raise LoopError(f"Unknown role: {role}")
     prompt = (
         f"Run exactly one Templeton coding-loop {role} pass for {subject} in "
-        f"{repo.slug}. Follow the loaded skill and repository instructions. "
+        f"{repo.slug}. The target repository checkout is {repo.root}. "
+        f"Read and follow the installed {skill} skill and repository instructions. "
         "Re-read live GitHub state before every mutation. Stop after this one unit of work. "
         "Never merge, enable auto-merge, deploy, publish, purchase, or mutate production. "
         "Return result, evidence, risk, and next action."
     )
-    command = ["hermes"]
-    if profile:
-        command.extend(["--profile", profile])
-    command.extend(
-        [
-            "chat",
-            "--worktree",
-            "--skills",
-            skill,
-            "--query",
+    if runtime == "hermes":
+        command = ["hermes"]
+        if profile:
+            command.extend(["--profile", profile])
+        command.extend(
+            [
+                "chat",
+                "--worktree",
+                "--skills",
+                skill,
+                "--query",
+                prompt,
+                "--quiet",
+                "--source",
+                "tool",
+                "--max-turns",
+                str(max_turns),
+            ]
+        )
+        return command
+    if runtime == "openclaw":
+        if not agent:
+            raise LoopError("OpenClaw runs require --agent AGENT_ID")
+        session_nonce = uuid.uuid4().hex[:12]
+        session_key = f"agent:{agent}:templeton-loop-{role}-{candidate.number}-{session_nonce}"
+        return [
+            "openclaw",
+            "agent",
+            "--agent",
+            agent,
+            "--session-key",
+            session_key,
+            "--message",
             prompt,
-            "--quiet",
-            "--source",
-            "tool",
-            "--max-turns",
-            str(max_turns),
+            "--thinking",
+            "high",
+            "--timeout",
+            str(max(60, timeout)),
+            "--json",
         ]
-    )
-    return command
+    raise LoopError(f"Unknown runtime: {runtime}")
 
 
 @contextlib.contextmanager
@@ -433,7 +460,9 @@ def run_pass(
     repo: Repo,
     *,
     role: str,
+    runtime: str,
     profile: str,
+    agent: str,
     max_turns: int,
     timeout: int,
     dry_run: bool,
@@ -445,8 +474,11 @@ def run_pass(
         repo=repo,
         role=role,
         candidate=candidate,
+        runtime=runtime,
         profile=profile,
+        agent=agent,
         max_turns=max_turns,
+        timeout=timeout,
     )
     if dry_run:
         return {
@@ -476,9 +508,48 @@ def run_pass(
     }
 
 
-def install_skills(profile: str, *, apply: bool, force: bool) -> dict[str, Any]:
+def install_skills(
+    *,
+    runtime: str,
+    profile: str,
+    agent: str,
+    apply: bool,
+    force: bool,
+) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parent.parent
-    source = project_root / "skills"
+    source = project_root / ("skills-openclaw" if runtime == "openclaw" else "skills")
+    if not source.is_dir():
+        raise LoopError(f"Skill source directory is missing: {source}")
+
+    if runtime == "openclaw":
+        if not agent:
+            raise LoopError("OpenClaw skill installation requires --agent AGENT_ID")
+        planned: list[dict[str, Any]] = []
+        for skill_dir in sorted(path for path in source.iterdir() if path.is_dir()):
+            command = [
+                "openclaw",
+                "skills",
+                "install",
+                str(skill_dir),
+                "--agent",
+                agent,
+                "--as",
+                skill_dir.name,
+            ]
+            if force:
+                command.append("--force")
+            planned.append({"skill": skill_dir.name, "command": command})
+            if apply:
+                _run(command)
+        return {
+            "status": "installed" if apply else "dry-run",
+            "runtime": runtime,
+            "agent": agent,
+            "skills": planned,
+        }
+
+    if runtime != "hermes":
+        raise LoopError(f"Unknown runtime: {runtime}")
     config_cmd = ["hermes"]
     if profile:
         config_cmd.extend(["--profile", profile])
@@ -498,6 +569,7 @@ def install_skills(profile: str, *, apply: bool, force: bool) -> dict[str, Any]:
         shutil.copytree(skill_dir, target)
     return {
         "status": "installed" if apply else "dry-run",
+        "runtime": runtime,
         "profile": profile or "default",
         "config": str(config_path),
         "skills": planned,
@@ -531,7 +603,9 @@ def parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run")
     run.add_argument("role", choices=("build", "review"))
     run.add_argument("--repo", default=".")
+    run.add_argument("--runtime", choices=("hermes", "openclaw"), default="hermes")
     run.add_argument("--profile", default="nikki")
+    run.add_argument("--agent", default="", help="OpenClaw agent id")
     run.add_argument("--max-turns", type=int, default=90)
     run.add_argument("--timeout", type=int, default=3600)
     run.add_argument("--interval", type=int, default=300)
@@ -540,7 +614,9 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--dry-run", action="store_true")
 
     install = sub.add_parser("install-skills")
+    install.add_argument("--runtime", choices=("hermes", "openclaw"), default="hermes")
     install.add_argument("--profile", default="nikki")
+    install.add_argument("--agent", default="", help="OpenClaw agent id")
     install.add_argument("--apply", action="store_true")
     install.add_argument("--force", action="store_true")
     return root
@@ -551,7 +627,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "install-skills":
             print_result(
-                install_skills(args.profile, apply=args.apply, force=args.force),
+                install_skills(
+                    runtime=args.runtime,
+                    profile=args.profile,
+                    agent=args.agent,
+                    apply=args.apply,
+                    force=args.force,
+                ),
                 as_json=args.json,
             )
             return 0
@@ -575,7 +657,9 @@ def main(argv: list[str] | None = None) -> int:
                     data = run_pass(
                         repo,
                         role=args.role,
+                        runtime=args.runtime,
                         profile=args.profile,
+                        agent=args.agent,
                         max_turns=args.max_turns,
                         timeout=args.timeout,
                         dry_run=args.dry_run,

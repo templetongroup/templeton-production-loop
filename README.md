@@ -40,7 +40,10 @@ Linear is removed. GitHub Issues are the durable specification, approval queue, 
 - `templeton-loop-build` — one repair or one issue-to-PR build pass.
 - `templeton-loop-review` — one fresh-context, SHA-pinned PR review pass.
 - `templeton-loop-status` — read-only operator queue and action list.
-- `templeton-loop` CLI — doctor, label bootstrap, deterministic queue selection, skill install, and bounded/persistent runners.
+- `templeton-loop` CLI — doctor, label bootstrap, deterministic queue selection, runtime-aware skill install, and bounded/persistent Hermes or OpenClaw runners.
+- `skills/` — Hermes-native role skills.
+- `skills-openclaw/` — OpenClaw-native role skills with explicit git-worktree isolation.
+- `scripts/build_exports.py` — creates shareable, checksummed Hermes and OpenClaw ZIP bundles.
 
 ## Safety boundaries
 
@@ -153,6 +156,15 @@ cd /Users/ai/projects/templeton/coding-loop
 .venv/bin/python -m compileall -q templeton_loop tests
 .venv/bin/templeton-loop --help
 ```
+
+## Portable exports
+
+```bash
+cd /Users/ai/projects/templeton/coding-loop
+.venv/bin/python scripts/build_exports.py
+```
+
+This produces separate checksummed Hermes and OpenClaw ZIP archives under `dist/`. The OpenClaw edition uses fresh `openclaw agent` session keys and OpenClaw-local skills; it does not invoke Hermes.
 
 ## Attribution
 

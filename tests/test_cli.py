@@ -92,8 +92,11 @@ def test_agent_command_is_fresh_worktree_and_contains_hard_gates():
         repo=repo,
         role="build",
         candidate=Candidate(42, "Thing", "https://github.com/org/repo/issues/42"),
+        runtime="hermes",
         profile="nikki",
+        agent="",
         max_turns=80,
+        timeout=3600,
     )
     joined = " ".join(command)
     assert "--worktree" in command
@@ -109,7 +112,32 @@ def test_review_command_pins_candidate_head_sha():
         repo=repo,
         role="review",
         candidate=Candidate(8, "Review", "https://github.com/org/repo/pull/8", head_sha="feedface"),
+        runtime="hermes",
         profile="nikki",
+        agent="",
         max_turns=90,
+        timeout=3600,
     )
     assert "head feedface" in " ".join(command)
+
+
+def test_openclaw_agent_command_is_fresh_and_names_agent_repo_and_skill():
+    repo = Repo(Path("/tmp/repo"), "org/repo", "https://github.com/org/repo", "main")
+    command = agent_command(
+        repo=repo,
+        role="build",
+        candidate=Candidate(42, "Thing", "https://github.com/org/repo/issues/42"),
+        runtime="openclaw",
+        profile="",
+        agent="builder",
+        max_turns=90,
+        timeout=1800,
+    )
+    joined = " ".join(command)
+    assert command[:2] == ["openclaw", "agent"]
+    assert "--agent builder" in joined
+    assert "agent:builder:templeton-loop-build-42-" in joined
+    assert "templeton-loop-build" in joined
+    assert "/tmp/repo" in joined
+    assert "Never merge" in joined
+    assert "--timeout 1800" in joined

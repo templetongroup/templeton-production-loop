@@ -64,9 +64,22 @@ print('FAKE_HERMES_BUILD_PASS_OK')
         )
         hermes.chmod(0o755)
 
+        openclaw_log = base / "openclaw.log"
+        openclaw = fakebin / "openclaw"
+        openclaw.write_text(
+            """#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ['FAKE_OPENCLAW_LOG'],'a') as f: f.write(json.dumps(sys.argv[1:])+'\\n')
+print(json.dumps({'ok':True,'reply':'FAKE_OPENCLAW_BUILD_PASS_OK'}))
+""",
+            encoding="utf-8",
+        )
+        openclaw.chmod(0o755)
+
         env = os.environ.copy()
         env["PATH"] = f"{fakebin}:{env['PATH']}"
         env["FAKE_LABEL_LOG"] = str(label_log)
+        env["FAKE_OPENCLAW_LOG"] = str(openclaw_log)
 
         run(["git", "init", "-b", "main"], cwd=repo, env=env)
         run(["git", "config", "user.email", "loop@example.test"], cwd=repo, env=env)
@@ -113,11 +126,49 @@ print('FAKE_HERMES_BUILD_PASS_OK')
         assert "--worktree" in log
         assert "Never merge" in log
 
+        openclaw_built = json.loads(
+            run(
+                cli
+                + [
+                    "--json",
+                    "run",
+                    "build",
+                    "--runtime",
+                    "openclaw",
+                    "--agent",
+                    "builder",
+                    "--repo",
+                    str(repo),
+                    "--timeout",
+                    "30",
+                ],
+                cwd=ROOT,
+                env=env,
+            ).stdout
+        )
+        assert openclaw_built["status"] == "completed"
+        assert "FAKE_OPENCLAW_BUILD_PASS_OK" in openclaw_built["output"]
+        invocation = json.loads(openclaw_log.read_text().splitlines()[-1])
+        assert invocation[:2] == ["agent", "--agent"]
+        assert "builder" in invocation
+        assert any(value.startswith("agent:builder:templeton-loop-build-12-") for value in invocation)
+        assert "--json" in invocation
+
+        install_preview = json.loads(
+            run(
+                cli + ["--json", "install-skills", "--runtime", "openclaw", "--agent", "builder"],
+                cwd=ROOT,
+                env=env,
+            ).stdout
+        )
+        assert install_preview["status"] == "dry-run"
+        assert len(install_preview["skills"]) == 4
+
         review = json.loads(
             run(cli + ["--json", "run", "review", "--repo", str(repo), "--timeout", "30"], cwd=ROOT, env=env).stdout
         )
         assert review["status"] == "idle"
-        print("TEMPLETON_LOOP_FIXTURE_OK doctor labels queue build review")
+        print("TEMPLETON_LOOP_FIXTURE_OK doctor labels hermes-build openclaw-build review")
     return 0
 
 

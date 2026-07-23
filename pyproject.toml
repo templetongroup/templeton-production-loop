@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "templeton-coding-loop"
-version = "0.1.0"
-description = "Human-gated GitHub + Hermes coding loop inspired by Finn-loop"
+version = "0.2.0"
+description = "Human-gated GitHub coding loop for Hermes and OpenClaw, inspired by Finn-loop"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
