@@ -37,9 +37,10 @@ _READ_ONLY = ("read", "exec", "process")
 _MUTATING = ("read", "write", "edit", "apply_patch", "exec", "process")
 _HERMES_SANDBOX_TOOLS = ("terminal", "todo")
 _HERMES_REPORT_TOOLS = ("todo",)
+_NO_TOOLS: tuple[str, ...] = ()
 
 ROLE_POLICIES: dict[str, RolePolicy] = {
-    "spec": RolePolicy("spec", False, _HERMES_REPORT_TOOLS, _READ_ONLY, FORBIDDEN_EFFECTS),
+    "spec": RolePolicy("spec", False, _HERMES_REPORT_TOOLS, _NO_TOOLS, FORBIDDEN_EFFECTS),
     "plan-review": RolePolicy("plan-review", False, _HERMES_REPORT_TOOLS, _READ_ONLY, FORBIDDEN_EFFECTS),
     "build": RolePolicy("build", True, _HERMES_SANDBOX_TOOLS, _MUTATING, FORBIDDEN_EFFECTS),
     "review": RolePolicy("review", False, _HERMES_REPORT_TOOLS, _READ_ONLY, FORBIDDEN_EFFECTS),
@@ -83,8 +84,14 @@ def validate_agent_id(agent_id: str) -> str:
     return agent_id
 
 
-def required_openclaw_denies() -> set[str]:
-    return set(_REQUIRED_DENIES)
+def required_openclaw_denies(role: str | None = None) -> set[str]:
+    denied = set(_REQUIRED_DENIES)
+    if role == "spec":
+        # OpenClaw treats an empty allow list as the default allow policy. A
+        # wildcard deny is therefore required to make the packet-only spec
+        # role genuinely tool-less; deny rules take precedence over allow.
+        denied.add("*")
+    return denied
 
 
 def denial_canaries(role: str) -> dict[str, Any]:
@@ -147,7 +154,7 @@ def openclaw_agent_template(
         },
         "tools": {
             "allow": list(policy.openclaw_allow),
-            "deny": sorted(_REQUIRED_DENIES),
+            "deny": sorted(required_openclaw_denies(role)),
             "fs": {"workspaceOnly": True},
             "exec": {
                 "host": "sandbox",
@@ -202,8 +209,12 @@ def verify_openclaw_agent(agent: dict[str, Any], role: str) -> dict[str, Any]:
             f"tools.allow must be exactly {sorted(expected_allowed)}; got {sorted(allowed)}"
         )
     denied = _string_set(tools.get("deny"), "tools.deny")
-    if not _REQUIRED_DENIES <= denied:
-        raise PolicyError(f"tools.deny is missing {sorted(_REQUIRED_DENIES - denied)}")
+    required_denies = required_openclaw_denies(role)
+    if not required_denies <= denied:
+        missing = sorted(required_denies - denied)
+        if role == "spec" and "*" in missing:
+            raise PolicyError("Spec tools.deny must include the deny-all '*' rule")
+        raise PolicyError(f"tools.deny is missing {missing}")
     elevated = tools.get("elevated")
     if not isinstance(elevated, dict) or elevated.get("enabled") is not False:
         raise PolicyError("tools.elevated.enabled must be explicitly false")

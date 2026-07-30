@@ -153,7 +153,7 @@ def recommend_route(
 
 
 REQUIRED_CAPABILITIES: dict[str, tuple[str, ...]] = {
-    "spec": ("repository-read", "report-output"),
+    "spec": ("report-output",),
     "plan-review": ("repository-read", "report-output"),
     "build": ("repository-read", "workspace-write", "report-output"),
     "review": ("repository-read", "report-output"),

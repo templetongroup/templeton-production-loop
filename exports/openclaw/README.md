@@ -1,6 +1,6 @@
 # Templeton Coding Loop — OpenClaw Edition
 
-Version **1.0.0**. This standalone repository is fixed to OpenClaw; the CLI has no `--runtime` option. Its coding-loop roles and live `prove` command execute through explicit OpenClaw adapters. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
+Version **1.1.0**. This standalone repository is fixed to OpenClaw; the CLI has no `--runtime` option. Its coding-loop roles and live `prove` command execute through explicit OpenClaw adapters. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
 
 ## Requirements
 
@@ -44,6 +44,10 @@ Installed roles:
 - `templeton-loop-status`
 - `templeton-loop-prove`
 
+For a new project or material change, use `templeton-loop run spec`; never invoke the installed spec skill directly. On the first turn, the broker prepares and secret-scans a bounded packet from current issue metadata, tracked repository guidance, the trusted host's brief/research file, and explicit `--include` files. Every turn creates a fresh OpenClaw session, verifies the explicit wildcard deny-all spec policy (`tools.deny: ["*"]`) and empty read-only workspace, preserves transcript state under Git's `templeton-loop/spec/` metadata path, and accepts one trusted-host answer through `--answer-file`. The child never gets research tools, GitHub mutation capability, deployment access, or arbitrary workspace reads.
+
+The state file contains bounded product context and interview history. It is mode-restricted, excluded from source staging and release archives, and remains confidential local operator data.
+
 ## Create least-authority role policies
 
 Generate one policy entry per role and replace the image placeholder with a digest-pinned trusted image:
@@ -59,22 +63,23 @@ templeton-loop --json policy-template \
   > ./templeton-build-agent.json
 ```
 
-Repeat for `spec`, `plan-review`, `review`, `qa`, `status`, and `prove`. Add each generated object to `agents.list` using your normal reviewed OpenClaw configuration procedure, validate the configuration, restart/reload only as required by your deployment, then inspect the effective session policy:
+Repeat for `spec`, `plan-review`, `review`, `qa`, `status`, and `prove`. The dedicated spec workspace must exist and remain empty. Add each generated object to `agents.list` using your normal reviewed OpenClaw configuration procedure, validate the configuration, restart/reload only as required by your deployment, then inspect the effective session policy:
 
 ```bash
 openclaw config validate
 openclaw sandbox explain --agent templeton-build --session agent:templeton-build:main --json
 ```
 
-Templeton fails closed unless the configured and effective policy proves:
+Templeton fails closed unless the stored agent policy proves:
 
 - `sandbox.mode=all`, `scope=session`, Docker backend;
 - digest-pinned image, `network=none`, read-only root, all capabilities dropped, no extra binds;
 - exact role tool allowlist and required deny rules;
-- elevated execution disabled;
-- exact staged workspace access only (`rw` for build and prove, `ro` for review and QA).
+- elevated execution disabled.
 
-The gateway remains trusted host software. Only child tool execution is sandboxed. Keep GitHub/cloud/registry/deployment credentials out of the role agents. The `run` broker independently governs `build`, `review`, and `qa`; the `prove` command governs proof execution. `spec`, `plan-review`, and `status` are direct, human-invoked role skills and must run only through their exact generated role policy.
+The fresh `sandbox explain` output must independently prove `mode=all`, `scope=session`, Docker backend, sandboxed execution, top-level elevated execution disabled, a sandbox tool envelope that does not block required role tools, and exact staged workspace routing. Writable roles map the staged workspace to `/workspace`; read-only roles use a session sandbox at `/workspace` and mount the staged workspace read-only at `/agent`. OpenClaw 2026.7.1 does not expose the stored Docker hardening or direct agent tool policy in this command, so Templeton verifies those fields from `agents.list` without claiming they appeared in the effective explanation.
+
+The gateway remains trusted host software. Only child tool execution is sandboxed. Keep GitHub/cloud/registry/deployment credentials out of the role agents. The `run` broker independently governs `spec`, `build`, `review`, and `qa`; the `prove` command governs proof execution. `plan-review` and `status` remain direct, human-invoked report roles. The spec broker supplies the bounded packet in the prompt, verifies policy before every fresh model session, requires an empty workspace, and hands back a sink-checked issue packet without any GitHub mutation phase.
 
 ## Outer GitHub loop
 
@@ -82,6 +87,12 @@ The gateway remains trusted host software. Only child tool execution is sandboxe
 templeton-loop doctor --repo /path/to/repo
 templeton-loop init --repo /path/to/repo --apply
 
+templeton-loop run spec --repo /path/to/repo --agent templeton-spec \
+  --session new-product --brief-file ./brief-and-research.md --include src/relevant.py
+templeton-loop run spec --repo /path/to/repo --agent templeton-spec \
+  --session new-product --answer-file ./answer.md
+templeton-loop run spec --repo /path/to/repo --agent templeton-spec \
+  --session new-product --confirm
 templeton-loop run build --repo /path/to/repo --agent templeton-build --dry-run
 templeton-loop run review --repo /path/to/repo --agent templeton-review --dry-run
 templeton-loop run qa --repo /path/to/repo --agent templeton-qa --dry-run
@@ -93,7 +104,7 @@ Remove `--dry-run` for one bounded pass. Watched mode is explicit:
 templeton-loop run build --repo /path/to/repo --agent templeton-build --forever --interval 300
 ```
 
-Tony or another authorized human must create/approve the issue contract, apply `loop:agent-ready`, and merge. Agents cannot merge, deploy, publish, purchase, or mutate production.
+Tony must approve the issue contract and alone may apply `loop:agent-ready`. Tony or a trusted host may file the approved packet with `loop:spec-draft`; Tony or another authorized human may merge. Agents cannot merge, deploy, publish, purchase, or mutate production.
 
 ## Artifact proof runner
 

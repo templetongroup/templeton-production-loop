@@ -1,6 +1,6 @@
 # Templeton Coding Loop — Hermes Edition
 
-Version **1.0.0**. This standalone repository is fixed to Hermes; the CLI has no `--runtime` option.
+Version **1.1.0**. This standalone repository is fixed to Hermes; the CLI has no `--runtime` option.
 
 ## Requirements
 
@@ -76,12 +76,26 @@ Installed roles:
 - `templeton-loop-status`
 - `templeton-loop-prove`
 
+For a new project or material change, use `templeton-loop run spec`; never invoke the installed spec skill directly. On the first turn, the broker prepares and secret-scans a bounded packet from current issue metadata, tracked repository guidance, the trusted host's brief/research file, and explicit `--include` files. Every turn re-verifies the dedicated Hermes runtime, forces safe mode with only `todo`, preserves the interview transcript under Git's `templeton-loop/spec/` metadata path, and scans the structured result. The model cannot file the returned issue packet.
+
+The state file contains bounded product context and interview history. It is mode-restricted, excluded from source staging and release archives, and remains confidential local operator data.
+
+```bash
+templeton-loop run spec --repo /path/to/repo --profile templeton \
+  --session new-product --brief-file ./brief-and-research.md --include src/relevant.py
+templeton-loop run spec --repo /path/to/repo --profile templeton \
+  --session new-product --answer-file ./answer.md
+templeton-loop run spec --repo /path/to/repo --profile templeton \
+  --session new-product --confirm
+```
+
 ## Outer GitHub loop
 
 ```bash
 templeton-loop doctor --repo /path/to/repo
 templeton-loop init --repo /path/to/repo --apply
 
+templeton-loop run spec --repo /path/to/repo --profile templeton --session new-product --brief-file ./brief.md --dry-run
 templeton-loop run build --repo /path/to/repo --profile templeton --dry-run
 templeton-loop run review --repo /path/to/repo --profile templeton --dry-run
 templeton-loop run qa --repo /path/to/repo --profile templeton --dry-run
@@ -93,7 +107,7 @@ Remove `--dry-run` for one bounded pass. Watched mode is explicit:
 templeton-loop run build --repo /path/to/repo --profile templeton --forever --interval 300
 ```
 
-Tony or another authorized human must create/approve the issue contract, apply `loop:agent-ready`, and merge. Agents cannot merge, deploy, publish, purchase, or mutate production.
+Tony must approve the issue contract and alone may apply `loop:agent-ready`. Tony or a trusted host may file the approved packet with `loop:spec-draft`; Tony or another authorized human may merge. Agents cannot merge, deploy, publish, purchase, or mutate production.
 
 ## Artifact proof runner
 

@@ -58,7 +58,7 @@ def test_generated_editions_are_fixed_installable_and_valid(staged_editions: dic
         assert f"EDITION: str | None = '{runtime}'" in edition
         project = (stage / "pyproject.toml").read_text(encoding="utf-8")
         assert f'name = "templeton-coding-loop-{runtime}"' in project
-        assert 'version = "1.0.0"' in project
+        assert 'version = "1.1.0"' in project
 
     hermes_help = subprocess.run(
         [sys.executable, "-m", "templeton_loop.cli", "--help"],
@@ -76,6 +76,40 @@ def test_generated_editions_are_fixed_installable_and_valid(staged_editions: dic
     ).stdout
     assert "prove" in hermes_help and "--runtime" not in hermes_help
     assert "prove" in openclaw_help and "--runtime" not in openclaw_help
+
+
+def test_shipped_agent_instructions_preserve_brokered_spec_and_tony_only_gate(
+    staged_editions: dict[str, Path]
+):
+    for stage in staged_editions.values():
+        agents = (stage / "AGENTS.example.md").read_text(encoding="utf-8")
+        assert "spec role returns an issue packet" in agents
+        assert "does not create issues or apply labels" in agents
+        assert "Tony alone may apply `loop:agent-ready`" in agents
+
+
+def test_all_shipped_authority_language_is_tony_scoped():
+    from templeton_loop.cli import LABELS
+
+    assert "Tony" in LABELS["loop:spec-draft"][1]
+    assert "Tony-approved" in LABELS["loop:agent-ready"][1]
+    forbidden = (
+        "Humans retain `loop:agent-ready`",
+        "Human-approved contract ready for an agent",
+        "awaiting human approval",
+    )
+    roots = (
+        (ROOT, {".git", ".pytest_cache", ".venv", "dist"}),
+        (ROOT / "exports" / "hermes", set()),
+        (ROOT / "exports" / "openclaw", set()),
+    )
+    for root, excluded in roots:
+        markdown = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in root.rglob("*.md")
+            if not excluded.intersection(path.relative_to(root).parts)
+        )
+        assert not any(phrase in markdown for phrase in forbidden)
 
 
 def test_validator_rejects_modified_missing_extra_and_manifest_tampering(
@@ -189,7 +223,7 @@ def test_release_check_rejects_extra_nodes_symlinks_and_stage_drift(
         builder.check_outputs()
     builder.main()
 
-    archive = dist / "templeton-coding-loop-hermes-v1.0.0.zip"
+    archive = dist / "templeton-coding-loop-hermes-v1.1.0.zip"
     external = tmp_path / "external.zip"
     shutil.copyfile(archive, external)
     archive.unlink()

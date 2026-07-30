@@ -2,6 +2,25 @@
 
 All notable changes to Templeton Coding Loop are documented here.
 
+## 1.1.0 — 2026-07-30
+
+### Added
+
+- A trusted-host-grounded guided interview before issue drafting: one decision at a time, recommended answers, structured alternative/trade-off pairs, dependent decision traversal, collaborative idea generation, and periodic understanding checks.
+- An explicit shared-understanding gate that prevents issue-packet generation, source changes, or builder startup until Tony confirms the summarized project contract.
+- A first-class, one-turn-at-a-time `templeton-loop run spec` broker that prepares and scans bounded context, persists digest-checked interview state, re-verifies runtime policy before every model call, requires explicit `--confirm`, and scans the final report-only issue packet without writing GitHub state.
+- Untrusted-envelope encoding for replayed model transcripts and Git-resolved state paths that support normal repositories and linked worktrees.
+- Pinned provenance and generated-edition MIT attribution for the adapted `mattpocock/skills` interview concepts.
+
+### Changed
+
+- `templeton-loop-spec` now runs report-only from bounded, secret-filtered host context, shows the exact issue packet only after the interview gate, and hands the approved packet back for sink-checked filing. The role never mutates GitHub or source state, and Tony alone may apply `loop:agent-ready`.
+- GitHub label metadata, bundled plans, and release validation now identify Tony—not a generic human—as the sole `loop:agent-ready` authority.
+- Hermes spec turns run in safe mode with only `todo`; OpenClaw spec turns use an explicit wildcard deny-all policy (`tools.deny: ["*"]`), a fresh preflight-verified session, and an empty read-only workspace. Direct skill invocation is unsupported and must refuse prompts without the broker envelope.
+- Standalone Hermes and OpenClaw package versions advance to 1.1.0; all existing merge, deployment, credential, review, QA, and runtime-authority boundaries remain unchanged.
+- OpenClaw preflight now validates the actual 2026.7.1 `sandbox explain` schema, exact writable/read-only mount routing, top-level elevated state, and sandbox tool allow/deny envelope, with an isolated installed-CLI integration test. Documentation advertises only the implemented `--answer-file` continuation option.
+- Generated-bundle CI now installs hash-locked test dependencies in an isolated virtual environment, asserts that `templeton_loop` resolves inside that environment, and runs each edition's shipped tests with the same interpreter; edition-neutral parser coverage explicitly targets the source parser.
+
 ## 1.0.0 — 2026-07-23
 
 ### Added

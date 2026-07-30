@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,6 +13,53 @@ from templeton_loop.runtime import RuntimePolicyError, verify_hermes_runtime, ve
 
 
 PINNED = "worker@sha256:" + "a" * 64
+OPENCLAW = shutil.which("openclaw")
+SANDBOX_ALLOW = ["exec", "process", "read", "write", "edit", "apply_patch", "image"]
+
+
+def openclaw_explanation(workspace: Path, *, writable: bool) -> dict[str, Any]:
+    if writable:
+        effective_root = workspace
+        source = "agent"
+        mounts = [
+            {
+                "containerRoot": "/workspace",
+                "hostRoot": str(workspace),
+                "source": "workspace",
+                "writable": True,
+            }
+        ]
+    else:
+        effective_root = workspace.parent / "session-sandbox"
+        source = "sandbox"
+        mounts = [
+            {
+                "containerRoot": "/workspace",
+                "hostRoot": str(effective_root),
+                "source": "workspace",
+                "writable": False,
+            },
+            {
+                "containerRoot": "/agent",
+                "hostRoot": str(workspace),
+                "source": "agent",
+                "writable": False,
+            },
+        ]
+    return {
+        "sandbox": {
+            "mode": "all",
+            "scope": "session",
+            "backend": "docker",
+            "sessionIsSandboxed": True,
+            "workspaceAccess": "rw" if writable else "ro",
+            "workspaceSource": source,
+            "effectiveHostWorkspaceRoot": str(effective_root),
+            "workspaceMounts": mounts,
+            "tools": {"allow": list(SANDBOX_ALLOW), "deny": ["browser"]},
+        },
+        "elevated": {"enabled": False},
+    }
 
 
 def test_verify_hermes_runtime_requires_dedicated_air_gapped_config(
@@ -140,26 +189,7 @@ def test_verify_openclaw_runtime_checks_effective_sandbox(
     workspace.mkdir()
     agent = openclaw_agent_template("builder", "build", str(workspace), PINNED)
     monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
-    responses = iter(
-        [
-            [agent],
-            {
-                "sandbox": {
-                    "mode": "all",
-                    "backend": "docker",
-                    "network": "none",
-                    "image": PINNED,
-                    "readOnlyRoot": True,
-                    "capDrop": ["ALL"],
-                    "binds": [],
-                    "sessionIsSandboxed": True,
-                    "workspaceAccess": "rw",
-                    "effectiveHostWorkspaceRoot": str(workspace),
-                },
-                "tools": agent["tools"],
-            },
-        ]
-    )
+    responses = iter([[agent], openclaw_explanation(workspace, writable=True)])
     monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
 
     result = verify_openclaw_runtime(
@@ -174,6 +204,54 @@ def test_verify_openclaw_runtime_checks_effective_sandbox(
     assert result["denial_canaries"]["active_probes_run"] is False
 
 
+@pytest.mark.skipif(OPENCLAW is None, reason="OpenClaw CLI is not installed")
+def test_verify_openclaw_runtime_supports_installed_cli_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state = tmp_path / "state"
+    state.mkdir()
+    agent = openclaw_agent_template("templeton-spec", "spec", str(workspace), PINNED)
+    config = tmp_path / "openclaw.json"
+    config.write_text(json.dumps({"agents": {"list": [agent]}}), encoding="utf-8")
+    monkeypatch.setenv("OPENCLAW_CONFIG_PATH", str(config))
+    monkeypatch.setenv("OPENCLAW_STATE_DIR", str(state))
+    monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
+
+    result = verify_openclaw_runtime(
+        executable=str(OPENCLAW),
+        agent_id="templeton-spec",
+        role="spec",
+        workspace=workspace,
+        session_id="agent:templeton-spec:integration-probe",
+    )
+
+    assert result["effective_policy_verified"] is True
+    assert result["workspace_access"] == "ro"
+
+
+def test_verify_openclaw_runtime_requires_configured_spec_deny_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    agent = openclaw_agent_template("templeton-spec", "spec", str(workspace), PINNED)
+    agent["tools"]["deny"].remove("*")
+    responses = iter([[agent]])
+    monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
+
+    with pytest.raises(RuntimePolicyError, match="deny-all"):
+        verify_openclaw_runtime(
+            executable="openclaw",
+            agent_id="templeton-spec",
+            role="spec",
+            workspace=workspace,
+            session_id="spec-deny-all",
+        )
+
+
 def test_verify_openclaw_runtime_rejects_wrong_effective_access(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -181,26 +259,9 @@ def test_verify_openclaw_runtime_rejects_wrong_effective_access(
     workspace.mkdir()
     agent = openclaw_agent_template("reviewer", "review", str(workspace), PINNED)
     monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
-    responses = iter(
-        [
-            [agent],
-            {
-                "sandbox": {
-                    "mode": "all",
-                    "backend": "docker",
-                    "network": "none",
-                    "image": PINNED,
-                    "readOnlyRoot": True,
-                    "capDrop": ["ALL"],
-                    "binds": [],
-                    "sessionIsSandboxed": True,
-                    "workspaceAccess": "rw",
-                    "effectiveHostWorkspaceRoot": str(workspace),
-                },
-                "tools": agent["tools"],
-            },
-        ]
-    )
+    explanation = openclaw_explanation(workspace, writable=False)
+    explanation["sandbox"]["workspaceAccess"] = "rw"
+    responses = iter([[agent], explanation])
     monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
     with pytest.raises(RuntimePolicyError, match="workspace access"):
         verify_openclaw_runtime(
@@ -212,15 +273,103 @@ def test_verify_openclaw_runtime_rejects_wrong_effective_access(
         )
 
 
+def test_verify_openclaw_runtime_rejects_wrong_readonly_agent_mount(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    agent = openclaw_agent_template("reviewer", "review", str(workspace), PINNED)
+    explanation = openclaw_explanation(workspace, writable=False)
+    explanation["sandbox"]["workspaceMounts"][1]["hostRoot"] = str(tmp_path / "wrong")
+    responses = iter([[agent], explanation])
+    monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
+
+    with pytest.raises(RuntimePolicyError, match="read-only agent mount"):
+        verify_openclaw_runtime(
+            executable="openclaw",
+            agent_id="reviewer",
+            role="review",
+            workspace=workspace,
+            session_id="run-wrong-mount",
+        )
+
+
+def test_verify_openclaw_runtime_rejects_effective_elevated_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    agent = openclaw_agent_template("builder", "build", str(workspace), PINNED)
+    explanation = openclaw_explanation(workspace, writable=True)
+    explanation["elevated"]["enabled"] = True
+    responses = iter([[agent], explanation])
+    monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
+
+    with pytest.raises(RuntimePolicyError, match="elevated execution"):
+        verify_openclaw_runtime(
+            executable="openclaw",
+            agent_id="builder",
+            role="build",
+            workspace=workspace,
+            session_id="run-elevated",
+        )
+
+
+def test_verify_openclaw_runtime_rejects_sandbox_tool_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    agent = openclaw_agent_template("builder", "build", str(workspace), PINNED)
+    explanation = openclaw_explanation(workspace, writable=True)
+    explanation["sandbox"]["tools"]["allow"].remove("apply_patch")
+    responses = iter([[agent], explanation])
+    monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
+
+    with pytest.raises(RuntimePolicyError, match="blocks required role tools"):
+        verify_openclaw_runtime(
+            executable="openclaw",
+            agent_id="builder",
+            role="build",
+            workspace=workspace,
+            session_id="run-tool-block",
+        )
+
+
+def test_verify_openclaw_runtime_rejects_sandbox_tool_deny(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    agent = openclaw_agent_template("builder", "build", str(workspace), PINNED)
+    explanation = openclaw_explanation(workspace, writable=True)
+    explanation["sandbox"]["tools"]["deny"] = ["read"]
+    responses = iter([[agent], explanation])
+    monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
+    monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
+
+    with pytest.raises(RuntimePolicyError, match="denies required role tools"):
+        verify_openclaw_runtime(
+            executable="openclaw",
+            agent_id="builder",
+            role="build",
+            workspace=workspace,
+            session_id="run-tool-deny",
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("security", "allowlist", "full sandbox security"),
-        ("ask", "on-miss", "full sandbox security"),
-        ("applyPatch", {"workspaceOnly": False}, "workspace-only patching"),
+        ("security", "allowlist", "sandbox-only with workspace-only patching"),
+        ("ask", "on-miss", "sandbox-only with workspace-only patching"),
+        ("applyPatch", {"workspaceOnly": False}, "sandbox-only with workspace-only patching"),
     ],
 )
-def test_denial_canary_rejects_effective_openclaw_execution_drift(
+def test_denial_canary_rejects_configured_openclaw_execution_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     field: str,
@@ -230,28 +379,8 @@ def test_denial_canary_rejects_effective_openclaw_execution_drift(
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     agent = openclaw_agent_template("builder", "build", str(workspace), PINNED)
-    effective_tools = json.loads(json.dumps(agent["tools"]))
-    effective_tools["exec"][field] = value
-    responses = iter(
-        [
-            [agent],
-            {
-                "sandbox": {
-                    "mode": "all",
-                    "backend": "docker",
-                    "network": "none",
-                    "image": PINNED,
-                    "readOnlyRoot": True,
-                    "capDrop": ["ALL"],
-                    "binds": [],
-                    "sessionIsSandboxed": True,
-                    "workspaceAccess": "rw",
-                    "effectiveHostWorkspaceRoot": str(workspace),
-                },
-                "tools": effective_tools,
-            },
-        ]
-    )
+    agent["tools"]["exec"][field] = value
+    responses = iter([[agent]])
     monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
     monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
     with pytest.raises(RuntimePolicyError, match=message):
@@ -276,13 +405,13 @@ def test_denial_canary_requires_exact_local_worker_digest(
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("image", "worker@sha256:" + "b" * 64, "configured pinned digest"),
-        ("readOnlyRoot", False, "readOnlyRoot must be true"),
-        ("capDrop", [], "capDrop must include ALL"),
-        ("binds", ["/host:/sandbox"], "define no binds"),
+        ("image", "worker:latest", "pinned by a sha256 digest"),
+        ("readOnlyRoot", False, "network=none and readOnlyRoot=true"),
+        ("capDrop", [], "drop all capabilities"),
+        ("binds", ["/host:/sandbox"], "drop all capabilities"),
     ],
 )
-def test_verify_openclaw_runtime_rejects_effective_container_drift(
+def test_verify_openclaw_runtime_rejects_configured_container_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     field: str,
@@ -292,20 +421,8 @@ def test_verify_openclaw_runtime_rejects_effective_container_drift(
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     agent = openclaw_agent_template("builder", "build", str(workspace), PINNED)
-    effective = {
-        "mode": "all",
-        "backend": "docker",
-        "network": "none",
-        "image": PINNED,
-        "readOnlyRoot": True,
-        "capDrop": ["ALL"],
-        "binds": [],
-        "sessionIsSandboxed": True,
-        "workspaceAccess": "rw",
-        "effectiveHostWorkspaceRoot": str(workspace),
-    }
-    effective[field] = value
-    responses = iter([[agent], {"sandbox": effective, "tools": agent["tools"]}])
+    agent["sandbox"]["docker"][field] = value
+    responses = iter([[agent]])
     monkeypatch.setattr(runtime, "_run_json", lambda *_args, **_kwargs: next(responses))
     monkeypatch.setattr(runtime, "_verify_local_image", lambda image, _env: image)
 

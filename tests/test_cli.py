@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -202,6 +203,7 @@ def test_health_discovers_only_bounded_run_ledgers(tmp_path: Path):
     config = tmp_path / ".templeton" / "loop.json"
     config.parent.mkdir()
     config.write_text('{"version":1}\n', encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     runs = tmp_path / ".git" / "templeton-loop" / "runs"
     workflow_path = runs / "outer" / "events.jsonl"
     RunLedger(workflow_path).append({"type": "run_completed", "status": "passed"})

@@ -224,9 +224,43 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
             fail(f"Missing description: {path}")
         combined[name] = text
 
+    shipped_markdown = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(ROOT.rglob("*.md"))
+    )
+    forbidden_authority = (
+        "Humans retain `loop:agent-ready`",
+        "Human-approved contract ready for an agent",
+        "awaiting human approval",
+    )
+
     checks = {
         "spec human gate": "Never add `loop:agent-ready`" in combined["templeton-loop-spec"],
+        "spec one-question interview": (
+            "Ask exactly one decision question at a time" in combined["templeton-loop-spec"]
+        ),
+        "spec bounded research context": (
+            "bounded, secret-filtered repository and research context"
+            in combined["templeton-loop-spec"]
+            and "Use only that bounded context" in combined["templeton-loop-spec"]
+        ),
+        "spec researched facts": (
+            "Look up facts inside the supplied context" in combined["templeton-loop-spec"]
+        ),
+        "spec shared-understanding gate": (
+            "Do not create or update an issue at any point" in combined["templeton-loop-spec"]
+            and "shared understanding" in combined["templeton-loop-spec"]
+        ),
+        "spec report-only issue packet": (
+            "Output an approved issue packet" in combined["templeton-loop-spec"]
+            and "never runs `gh`" in combined["templeton-loop-spec"]
+        ),
+        "spec Tony-only agent-ready": "Tony alone may apply" in combined["templeton-loop-spec"],
+        "spec broker-only invocation": (
+            '<templeton-spec-broker schema="1">' in combined["templeton-loop-spec"]
+            and "Refuse direct invocation" in combined["templeton-loop-spec"]
+        ),
         "plan review advisory": "report-only" in combined["templeton-loop-plan-review"].lower(),
+        "plan review Tony-only gate": "Tony alone owns approval" in combined["templeton-loop-plan-review"],
         "build no merge/deploy": "Never merge, enable auto-merge, deploy" in combined["templeton-loop-build"],
         "build retry cap": "at most two builder repair rounds" in combined["templeton-loop-build"],
         "review required CI": "gh pr checks NUMBER --required" in combined["templeton-loop-review"],
@@ -243,6 +277,86 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
             "prove no merge/deploy": "Never merge, deploy" in prove,
             "prove no hooks/update": "auto-update" in prove.lower() and "global hooks" in prove.lower(),
             "prove provenance": "Ringer-derived code or assets" in prove,
+        }
+    )
+    notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    checks.update(
+        {
+            "Matt Pocock pinned provenance": (
+                "2ab958093e83e0ec752e6c1c5932da465bf23e0c" in notices
+            ),
+            "Matt Pocock copyright": "Copyright (c) 2026 Matt Pocock" in notices,
+            "Matt Pocock MIT grant": "Permission is hereby granted, free of charge" in notices,
+        }
+    )
+    specification = (ROOT / "templeton_loop" / "specification.py").read_text(encoding="utf-8")
+    policy = (ROOT / "templeton_loop" / "policy.py").read_text(encoding="utf-8")
+    runtime_source = (ROOT / "templeton_loop" / "runtime.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "tests" / "test_runtime.py").read_text(encoding="utf-8")
+    cli = (ROOT / "templeton_loop" / "cli.py").read_text(encoding="utf-8")
+    workflow = (ROOT / "templeton_loop" / "workflow.py").read_text(encoding="utf-8")
+    gitmeta = (ROOT / "templeton_loop" / "gitmeta.py").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.example.md").read_text(encoding="utf-8")
+    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    checks.update(
+        {
+            "brokered spec CLI": 'choices=("spec", "build", "review", "qa")' in cli,
+            "spec context and transcript digests": (
+                "spec-context-packet" in specification
+                and "context_sha256" in specification
+                and "spec-resumed-transcript" in specification
+            ),
+            "spec per-turn runtime preflight": "_preflight_spec_runtime(" in specification,
+            "spec explicit confirmation gate": (
+                "explicit broker confirmation" in specification and "--confirm" in cli
+            ),
+            "spec alternative tradeoffs": (
+                "one to four objects with non-empty option and tradeoff" in specification
+                and 'set(item) != {"option", "tradeoff"}' in specification
+            ),
+            "spec final sink check": 'sink="github-issue-packet"' in specification,
+            "spec replay boundary": (
+                'wrap_untrusted(\n        "spec-transcript"' in specification
+                and "\\u003c/templeton-spec-transcript\\u003e" not in specification
+            ),
+            "linked-worktree metadata routing": (
+                '"rev-parse"' in gitmeta
+                and "--git-path" in gitmeta
+                and "git_metadata_path" in specification
+                and "git_metadata_path" in cli
+                and "git_metadata_path" in workflow
+                and ' / ".git" / "templeton-loop"' not in workflow
+            ),
+            "Tony-scoped shipped authority": (
+                "Tony-approved contract ready for an agent" in cli
+                and "awaiting Tony's approval" in cli
+                and not any(phrase in shipped_markdown for phrase in forbidden_authority)
+            ),
+            "spec operator-file boundary": (
+                "stat.S_ISLNK" in specification
+                and "regular non-sensitive file" in specification
+                and "spec-brief-file" in specification
+                and "spec-user-answer" in specification
+            ),
+            "OpenClaw spec deny-all policy": (
+                'denied.add("*")' in policy
+                and 'sorted(required_openclaw_denies(role))' in policy
+                and "find_and_verify_openclaw_agent" in runtime_source
+                and "configured_policy_verified" in runtime_source
+                and "workspaceMounts" in runtime_source
+                and 'explained.get("elevated")' in runtime_source
+            ),
+            "OpenClaw installed CLI schema integration": (
+                "OPENCLAW_CONFIG_PATH" in runtime_tests
+                and "OPENCLAW_STATE_DIR" in runtime_tests
+                and "supports_installed_cli_schema" in runtime_tests
+            ),
+            "shipped Tony-only gate": "Tony alone may apply `loop:agent-ready`" in agents,
+            "shipped report-only filing contract": (
+                "spec role returns an issue packet" in agents
+                and "does not create issues or apply labels" in agents
+            ),
+            "supported 1.1 security line": "1.1.x is the supported release line" in security,
         }
     )
     failed = [name for name, passed in checks.items() if not passed]

@@ -5,7 +5,7 @@
 ## Product contract
 
 - GitHub Issues and PRs remain the durable contract/review surfaces.
-- Humans retain `loop:agent-ready`, merge, deploy, publish, purchase, and production authority.
+- Tony alone retains `loop:agent-ready` authority. Tony or another explicitly authorized human retains merge, deploy, publish, purchase, and production authority.
 - Agent prohibitions must be backed by runtime policy, not only prompt text.
 - Deterministic checks are release gates; model review is advisory unless a human accepts it.
 - All model-produced findings map to `AC-N`/`NG-N` and carry evidence/freshness metadata.
@@ -26,7 +26,7 @@
 
 1. Add typed capability policies for `spec`, `plan-review`, `build`, `review`, `qa`, and `prove`.
 2. Writable Hermes build/proof children use a dedicated preflight-verified Docker profile, explicit toolsets, ignored repository rules, and `HERMES_WRITE_SAFE_ROOT`; they do not use `--safe-mode`, because that would ignore the verified terminal profile. Report-only review/QA/spec/status children instead consume bounded prompt context under `--safe-mode` with a `todo`-only allowlist and receive no terminal or file tools.
-3. OpenClaw execution requires a dedicated agent whose effective tool policy and sandbox declaration match the shipped template; preflight fails closed when it cannot prove the contract.
+3. OpenClaw execution requires a dedicated agent whose stored direct tool policy and sandbox declaration match the shipped template; preflight also validates the fresh-session fields exposed by `sandbox explain` (sandbox state, workspace routing, elevated state, and sandbox tool envelope) and fails closed when it cannot prove either contract.
 4. Parent orchestration owns deterministic GitHub state transitions; children emit artifacts/findings rather than receiving merge/deploy/publish authority.
 5. Add denial canaries for forbidden capabilities and policy/config mismatch.
 

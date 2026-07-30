@@ -35,6 +35,33 @@ def test_hermes_policy_preserves_verified_profile_config_and_limits_tools():
     assert "terminal" not in hermes_policy_args("qa")
 
 
+def test_spec_role_is_report_only_in_both_runtimes():
+    assert hermes_policy_args("spec") == [
+        "--safe-mode", "--ignore-rules", "--toolsets", "todo"
+    ]
+    image = "worker@sha256:" + "a" * 64
+    spec = openclaw_agent_template("templeton-spec", "spec", "/workspace", image)
+    assert spec["sandbox"]["workspaceAccess"] == "ro"
+    assert spec["tools"]["allow"] == []
+    assert "*" in spec["tools"]["deny"]
+    allow = {item.lower() for item in spec["tools"]["allow"]}
+    deny = {item.lower() for item in spec["tools"]["deny"]}
+
+    def permitted(tool: str) -> bool:
+        if "*" in deny or tool.lower() in deny:
+            return False
+        return not allow or tool.lower() in allow
+
+    for tool in ("read", "write", "edit", "apply_patch", "exec", "web_search", "message"):
+        assert permitted(tool) is False
+    assert verify_openclaw_agent(spec, "spec")["allowed_tools"] == []
+
+    unsafe = json.loads(json.dumps(spec))
+    unsafe["tools"]["deny"].remove("*")
+    with pytest.raises(PolicyError, match="deny-all"):
+        verify_openclaw_agent(unsafe, "spec")
+
+
 def test_denial_canary_openclaw_template_and_verifier_fail_closed():
     image = "worker@sha256:" + "a" * 64
     build = openclaw_agent_template("templeton-builder", "build", "/workspace", image)
@@ -135,6 +162,6 @@ def test_provider_neutral_routing_requires_measured_evidence(tmp_path: Path):
 
 
 def test_capability_coverage_matrix_is_fail_closed():
-    matrix = coverage_matrix({"spec": ["repository-read", "report-output"]})
+    matrix = coverage_matrix({"spec": ["report-output"]})
     assert matrix["ok"] is False
     assert any(row["task_class"] == "build" and row["missing"] for row in matrix["rows"])

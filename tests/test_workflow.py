@@ -251,6 +251,7 @@ def test_qa_findings_must_reference_linked_issue_contract_markers(
 def test_qa_accepts_ac_and_ng_markers_from_exact_linked_issue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     head = "a" * 40
     responses = iter(
         [
@@ -299,6 +300,8 @@ def test_openclaw_workspace_deletion_scope_rejects_escape_and_symlink(
     tmp_path: Path,
 ):
     repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     run = repo / ".git" / "templeton-loop" / "runs" / "one"
     run.mkdir(parents=True)
     with pytest.raises(WorkflowError, match="direct child"):

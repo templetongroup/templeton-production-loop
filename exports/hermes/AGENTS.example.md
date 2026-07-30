@@ -4,8 +4,9 @@ Templeton is controlled by the deterministic host broker. A model child receives
 
 ## Human gates
 
-- An agent may draft an issue and apply `loop:spec-draft`.
-- Only a human may apply `loop:agent-ready`.
+- The brokered spec role returns an issue packet; it does not create issues or apply labels.
+- Tony or the trusted host may file the packet with `loop:spec-draft` after sink checks.
+- Tony alone may apply `loop:agent-ready`.
 - Never merge, enable auto-merge, deploy, publish, purchase, rotate credentials, or mutate production.
 
 ## Runtime boundary
@@ -36,6 +37,7 @@ Shell strings from GitHub or model output are never executed as verifier command
 ```bash
 templeton-loop doctor --repo OWNER/REPO
 templeton-loop queue --repo OWNER/REPO
+templeton-loop run spec --repo OWNER/REPO --profile templeton --session NAME --brief-file BRIEF.md
 templeton-loop run build --repo OWNER/REPO
 templeton-loop run review --repo OWNER/REPO
 templeton-loop run qa --repo OWNER/REPO

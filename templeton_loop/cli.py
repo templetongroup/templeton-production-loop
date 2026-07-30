@@ -20,6 +20,7 @@ from typing import Any, Iterable
 from .boundaries import BoundaryError, prepare_sink, wrap_untrusted
 from .edition import EDITION
 from .evidence import EvidenceError, RunLedger, atomic_write_json, validate_findings
+from .gitmeta import GitMetadataError, git_metadata_path
 from .policy import (
     PolicyError,
     denial_canaries,
@@ -31,12 +32,19 @@ from .policy import (
 from .proof import ProofError, dry_run as dry_run_proof, lint_manifest, run_proof, verify_event_chain
 from .routing import coverage_matrix, read_outcomes, recommend_route, summarize_outcomes
 from .runtime import RuntimePolicyError, verify_hermes_runtime, verify_openclaw_runtime
+from .specification import (
+    SpecError,
+    prepare_spec_context,
+    run_spec_turn,
+    spec_agent_command,
+    validate_spec_response,
+)
 from .workflow import WorkflowError, broker_build, broker_qa, broker_review
 
 
 LABELS: dict[str, tuple[str, str]] = {
-    "loop:spec-draft": ("D4C5F9", "Spec drafted; awaiting human approval"),
-    "loop:agent-ready": ("0E8A16", "Human-approved contract ready for an agent"),
+    "loop:spec-draft": ("D4C5F9", "Spec drafted; awaiting Tony's approval"),
+    "loop:agent-ready": ("0E8A16", "Tony-approved contract ready for an agent"),
     "loop:building": ("1D76DB", "Claimed by the coding loop"),
     "loop:blocked": ("B60205", "Agent needs one concrete human decision"),
     "loop:awaiting-review": ("FBCA04", "Builder PR awaiting fresh-context review"),
@@ -553,7 +561,7 @@ def agent_command(
 
 @contextlib.contextmanager
 def role_lock(repo: Repo, role: str):
-    lock_dir = repo.root / ".git" / "templeton-loop"
+    lock_dir = git_metadata_path(repo.root, "templeton-loop")
     lock_dir.mkdir(parents=True, exist_ok=True)
     lock_path = lock_dir / f"{role}.lock"
     with lock_path.open("w") as handle:
@@ -645,8 +653,8 @@ def run_pass(
             policy_box.update(evidence)
             return evidence
 
-        agent_workspace = (
-            repo.root / ".git" / "templeton-loop" / "openclaw-workspaces" / agent
+        agent_workspace = git_metadata_path(
+            repo.root, f"templeton-loop/openclaw-workspaces/{agent}"
         )
     else:
         raise LoopError(f"Unknown runtime: {runtime}")
@@ -754,7 +762,7 @@ def print_result(data: Any, *, as_json: bool) -> None:
 
 
 def health_report(repo: Repo) -> dict[str, Any]:
-    state_root = repo.root / ".git" / "templeton-loop"
+    state_root = git_metadata_path(repo.root, "templeton-loop")
     runs_root = state_root / "runs"
     ledger_reports: list[dict[str, Any]] = []
     ledger_ok = True
@@ -833,7 +841,7 @@ def parser(edition: str | None = None) -> argparse.ArgumentParser:
     init.add_argument("--apply", action="store_true", help="Create/update GitHub labels")
 
     run = sub.add_parser("run")
-    run.add_argument("role", choices=("build", "review", "qa"))
+    run.add_argument("role", choices=("spec", "build", "review", "qa"))
     run.add_argument("--repo", default=".")
     if effective_edition in {"hermes", "openclaw"}:
         run.set_defaults(runtime=effective_edition)
@@ -852,6 +860,16 @@ def parser(edition: str | None = None) -> argparse.ArgumentParser:
     run.add_argument("--max-passes", type=int, default=1)
     run.add_argument("--forever", action="store_true")
     run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--session", default="", help="Stable spec discovery session id")
+    run.add_argument("--brief-file", type=Path, help="Initial trusted-host brief/research packet")
+    run.add_argument("--answer-file", type=Path, help="Answer or correction for the next spec turn")
+    run.add_argument("--confirm", action="store_true", help="Confirm the last shared-understanding summary")
+    run.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="Additional tracked UTF-8 repository file to include in the initial spec packet",
+    )
 
     prove = sub.add_parser("prove")
     prove.add_argument("manifest")
@@ -1015,7 +1033,54 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
             }
         elif args.command == "health":
             data = health_report(repo)
+        elif args.command == "run" and args.role == "spec":
+            if not args.session:
+                raise LoopError("Brokered spec runs require --session SESSION_ID")
+            if args.forever or args.max_passes != 1:
+                raise LoopError("Brokered spec runs execute exactly one stateful interview turn per invocation")
+            issue_context: list[dict[str, Any]] = []
+            if args.brief_file is not None:
+                issue_context = _json(
+                    _run(
+                        [
+                            "gh",
+                            "issue",
+                            "list",
+                            "--repo",
+                            repo.slug,
+                            "--state",
+                            "open",
+                            "--limit",
+                            "50",
+                            "--json",
+                            "number,title,url,labels",
+                        ],
+                        cwd=repo.root,
+                    )
+                )
+                if not isinstance(issue_context, list):
+                    raise LoopError("GitHub issue context must be an array")
+            with role_lock(repo, "spec"):
+                data = run_spec_turn(
+                    repo,
+                    runtime=args.runtime,
+                    profile=getattr(args, "profile", ""),
+                    agent=getattr(args, "agent", ""),
+                    session=args.session,
+                    brief_file=args.brief_file,
+                    answer_file=args.answer_file,
+                    confirm=args.confirm,
+                    includes=args.include,
+                    max_turns=args.max_turns,
+                    timeout=args.timeout,
+                    dry_run=args.dry_run,
+                    issue_context=issue_context,
+                )
+            print_result(data, as_json=args.json)
+            return 0
         elif args.command == "run":
+            if args.session or args.brief_file or args.answer_file or args.confirm or args.include:
+                raise LoopError("Spec interview options are valid only with `run spec`")
             passes = 0
             with role_lock(repo, args.role):
                 while args.forever or passes < args.max_passes:
@@ -1043,7 +1108,9 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
         LoopError,
         ProofError,
         PolicyError,
+        GitMetadataError,
         RuntimePolicyError,
+        SpecError,
         BoundaryError,
         EvidenceError,
         WorkflowError,

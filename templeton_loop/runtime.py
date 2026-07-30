@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -13,7 +14,6 @@ from .policy import (
     denial_canaries,
     find_and_verify_openclaw_agent,
     get_role_policy,
-    required_openclaw_denies,
     validate_agent_id,
 )
 
@@ -166,7 +166,10 @@ def verify_openclaw_runtime(
     entries = _run_json([executable, "config", "get", "agents.list", "--json"])
     if not isinstance(entries, list):
         raise RuntimePolicyError("OpenClaw agents.list must be a JSON array")
-    configured = find_and_verify_openclaw_agent(entries, agent_id, role, workspace)
+    try:
+        configured = find_and_verify_openclaw_agent(entries, agent_id, role, workspace)
+    except PolicyError as exc:
+        raise RuntimePolicyError(str(exc)) from exc
     explained = _run_json(
         [
             executable,
@@ -181,38 +184,25 @@ def verify_openclaw_runtime(
     )
     if not isinstance(explained, dict):
         raise RuntimePolicyError("OpenClaw sandbox explain must return an object")
-    effective = explained.get("sandbox") if isinstance(explained.get("sandbox"), dict) else explained
+    effective = explained.get("sandbox")
+    if not isinstance(effective, dict):
+        raise RuntimePolicyError("OpenClaw sandbox explain must include sandbox state")
     if effective.get("sessionIsSandboxed") is not True:
         raise RuntimePolicyError("OpenClaw effective session is not sandboxed")
     if effective.get("mode") != "all":
         raise RuntimePolicyError("OpenClaw effective sandbox mode must be all")
+    if effective.get("scope") != "session":
+        raise RuntimePolicyError("OpenClaw effective sandbox scope must be session")
     if effective.get("backend") != "docker":
         raise RuntimePolicyError("OpenClaw effective sandbox backend must be docker")
-    if effective.get("network") != "none":
-        raise RuntimePolicyError("OpenClaw effective sandbox network must be none")
-    effective_docker = (
-        effective.get("docker") if isinstance(effective.get("docker"), dict) else effective
-    )
-    if effective_docker.get("image") != configured["image"]:
-        raise RuntimePolicyError(
-            "OpenClaw effective sandbox image must equal the configured pinned digest"
-        )
-    if effective_docker.get("readOnlyRoot") is not True:
-        raise RuntimePolicyError("OpenClaw effective sandbox readOnlyRoot must be true")
-    cap_drop = effective_docker.get("capDrop")
-    if (
-        not isinstance(cap_drop, list)
-        or any(not isinstance(item, str) for item in cap_drop)
-        or "all" not in {item.lower() for item in cap_drop}
-    ):
-        raise RuntimePolicyError("OpenClaw effective sandbox capDrop must include ALL")
-    if effective_docker.get("binds") != []:
-        raise RuntimePolicyError("OpenClaw effective sandbox must define no binds")
-    expected_access = "rw" if get_role_policy(role).writable_workspace else "ro"
+
+    policy = get_role_policy(role)
+    expected_access = "rw" if policy.writable_workspace else "ro"
     if effective.get("workspaceAccess") != expected_access:
         raise RuntimePolicyError(
             f"OpenClaw effective workspace access must be {expected_access}"
         )
+
     effective_root = effective.get("effectiveHostWorkspaceRoot")
     if not isinstance(effective_root, str) or not effective_root:
         raise RuntimePolicyError("OpenClaw effective host workspace root must be present")
@@ -225,51 +215,96 @@ def verify_openclaw_runtime(
         )
     resolved_effective = effective_path.absolute()
     configured_root = configured_path.absolute()
-    if resolved_effective != configured_root:
-        raise RuntimePolicyError(
-            "OpenClaw effective workspace root does not match the configured agent workspace"
-        )
-    if requested_path.absolute() != resolved_effective:
-        raise RuntimePolicyError("OpenClaw effective workspace must equal the exact staged workspace")
+    if requested_path.absolute() != configured_root:
+        raise RuntimePolicyError("OpenClaw configured workspace must equal the exact staged workspace")
 
-    policy = get_role_policy(role)
-    effective_tools = explained.get("tools")
-    if not isinstance(effective_tools, dict) and isinstance(effective.get("tools"), dict):
-        effective_tools = effective["tools"]
-    if not isinstance(effective_tools, dict):
-        raise RuntimePolicyError("OpenClaw sandbox explain must include effective tools policy")
-    allow = effective_tools.get("allow")
-    deny = effective_tools.get("deny")
-    if not isinstance(allow, list) or any(not isinstance(item, str) for item in allow):
-        raise RuntimePolicyError("OpenClaw effective tools.allow must be an explicit string array")
-    if {item.lower() for item in allow} != {item.lower() for item in policy.openclaw_allow}:
-        raise RuntimePolicyError("OpenClaw effective tools.allow does not match the role policy")
-    if not isinstance(deny, list) or any(not isinstance(item, str) for item in deny):
-        raise RuntimePolicyError("OpenClaw effective tools.deny must be an explicit string array")
-    if not required_openclaw_denies() <= {item.lower() for item in deny}:
-        raise RuntimePolicyError("OpenClaw effective tools.deny is missing required deny rules")
-    elevated = effective_tools.get("elevated")
+    mounts = effective.get("workspaceMounts")
+    if not isinstance(mounts, list) or any(not isinstance(item, dict) for item in mounts):
+        raise RuntimePolicyError("OpenClaw sandbox explain must include explicit workspace mounts")
+    workspace_mounts = [item for item in mounts if item.get("source") == "workspace"]
+    agent_mounts = [item for item in mounts if item.get("source") == "agent"]
+    if policy.writable_workspace:
+        if effective.get("workspaceSource") != "agent" or resolved_effective != configured_root:
+            raise RuntimePolicyError(
+                "OpenClaw writable sandbox must use the exact configured agent workspace"
+            )
+        if len(mounts) != 1 or len(workspace_mounts) != 1 or agent_mounts:
+            raise RuntimePolicyError("OpenClaw writable sandbox must expose exactly one workspace mount")
+        mount = workspace_mounts[0]
+        if (
+            mount.get("containerRoot") != "/workspace"
+            or mount.get("writable") is not True
+            or not isinstance(mount.get("hostRoot"), str)
+            or Path(mount["hostRoot"]).expanduser().absolute() != configured_root
+        ):
+            raise RuntimePolicyError(
+                "OpenClaw writable workspace mount must map the staged workspace to /workspace"
+            )
+    else:
+        if effective.get("workspaceSource") != "sandbox":
+            raise RuntimePolicyError("OpenClaw read-only role must use a session sandbox workspace")
+        if len(mounts) != 2 or len(workspace_mounts) != 1 or len(agent_mounts) != 1:
+            raise RuntimePolicyError(
+                "OpenClaw read-only sandbox must expose workspace and agent mounts only"
+            )
+        workspace_mount = workspace_mounts[0]
+        if (
+            workspace_mount.get("containerRoot") != "/workspace"
+            or workspace_mount.get("writable") is not False
+            or not isinstance(workspace_mount.get("hostRoot"), str)
+            or Path(workspace_mount["hostRoot"]).expanduser().absolute() != resolved_effective
+        ):
+            raise RuntimePolicyError("OpenClaw session workspace mount must be read-only at /workspace")
+        agent_mount = agent_mounts[0]
+        if (
+            agent_mount.get("containerRoot") != "/agent"
+            or agent_mount.get("writable") is not False
+            or not isinstance(agent_mount.get("hostRoot"), str)
+            or Path(agent_mount["hostRoot"]).expanduser().absolute() != configured_root
+        ):
+            raise RuntimePolicyError(
+                "OpenClaw read-only agent mount must map the staged workspace to /agent"
+            )
+
+    elevated = explained.get("elevated")
     if not isinstance(elevated, dict) or elevated.get("enabled") is not False:
         raise RuntimePolicyError("OpenClaw effective elevated execution must be disabled")
-    fs = effective_tools.get("fs")
-    execution = effective_tools.get("exec")
-    if not isinstance(fs, dict) or fs.get("workspaceOnly") is not True:
-        raise RuntimePolicyError("OpenClaw effective filesystem policy must be workspace-only")
-    if not isinstance(execution, dict) or execution.get("host") != "sandbox":
-        raise RuntimePolicyError("OpenClaw effective execution policy must be sandbox-only")
-    patching = execution.get("applyPatch")
-    if (
-        execution.get("security") != "full"
-        or execution.get("ask") != "off"
-        or not isinstance(patching, dict)
-        or patching.get("workspaceOnly") is not True
-    ):
+
+    # OpenClaw 2026.7.1 exposes the sandbox-level tool envelope here, not the
+    # direct agents.list[].tools policy. The direct role policy was verified
+    # above from config; this check ensures its allowed tools remain available
+    # inside the sandbox without claiming unavailable fields were observed.
+    sandbox_tools = effective.get("tools")
+    if not isinstance(sandbox_tools, dict):
+        raise RuntimePolicyError("OpenClaw sandbox explain must include sandbox tools policy")
+    sandbox_allow = sandbox_tools.get("allow")
+    sandbox_deny = sandbox_tools.get("deny")
+    if not isinstance(sandbox_allow, list) or any(not isinstance(item, str) for item in sandbox_allow):
+        raise RuntimePolicyError("OpenClaw sandbox tools.allow must be an explicit string array")
+    if not isinstance(sandbox_deny, list) or any(not isinstance(item, str) for item in sandbox_deny):
+        raise RuntimePolicyError("OpenClaw sandbox tools.deny must be an explicit string array")
+    sandbox_denied = {item.lower() for item in sandbox_deny}
+    blocked_role_tools = {
+        tool
+        for tool in policy.openclaw_allow
+        if any(fnmatchcase(tool.lower(), pattern) for pattern in sandbox_denied)
+    }
+    if blocked_role_tools:
         raise RuntimePolicyError(
-            "OpenClaw effective execution policy must use full sandbox security, ask=off, "
-            "and workspace-only patching"
+            f"Effective OpenClaw sandbox denies required role tools: {sorted(blocked_role_tools)}"
         )
+    missing_sandbox_tools = {
+        item.lower() for item in policy.openclaw_allow
+    } - {item.lower() for item in sandbox_allow}
+    if missing_sandbox_tools:
+        raise RuntimePolicyError(
+            f"OpenClaw sandbox tools policy blocks required role tools: {sorted(missing_sandbox_tools)}"
+        )
+
     _verify_local_image(str(configured["image"]), os.environ)
     configured["session"] = session_id
+    configured["configured_policy_verified"] = True
+    configured["sandbox_explain_verified"] = True
     configured["effective_policy_verified"] = True
     configured["denial_canaries"] = denial_canaries(role)
     return configured

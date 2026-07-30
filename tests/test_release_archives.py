@@ -61,8 +61,8 @@ def test_archives_are_reproducible_and_safe(tmp_path: Path, monkeypatch: pytest.
     assert builder.main() == 0
     assert not (dist / "exports.json").exists()
     assert {path.name for path in dist.glob("*.zip")} == {
-        "templeton-coding-loop-hermes-v1.0.0.zip",
-        "templeton-coding-loop-openclaw-v1.0.0.zip",
+        "templeton-coding-loop-hermes-v1.1.0.zip",
+        "templeton-coding-loop-openclaw-v1.1.0.zip",
     }
     before = {path.name: sha256(path) for path in dist.glob("*.zip")}
     assert builder.main() == 0
@@ -85,6 +85,30 @@ def test_archives_are_reproducible_and_safe(tmp_path: Path, monkeypatch: pytest.
             assert all(name.startswith(expected_root) for name in names)
             assert all(".." not in Path(name).parts and not name.startswith("/") for name in names)
             assert all(stat.S_ISREG(entry.external_attr >> 16) for entry in entries)
+
+
+def test_matt_pocock_notice_is_preserved_in_both_editions_and_archives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    builder = load_builder()
+    dist = tmp_path / "dist"
+    monkeypatch.setattr(builder, "DIST", dist)
+    monkeypatch.setattr(builder, "STAGE", dist / "stage")
+    required = (
+        "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+        "Copyright (c) 2026 Matt Pocock",
+        "Permission is hereby granted, free of charge",
+    )
+    for runtime in ("hermes", "openclaw"):
+        _name, stage = builder.stage_bundle(runtime)
+        notice = (stage / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        assert all(value in notice for value in required)
+
+    assert builder.main() == 0
+    for archive in dist.glob("*.zip"):
+        with zipfile.ZipFile(archive) as bundle:
+            notice = bundle.read(f"{archive.stem}/THIRD_PARTY_NOTICES.md").decode("utf-8")
+        assert all(value in notice for value in required)
 
 
 def test_validator_accepts_git_metadata_but_not_build_noise(
@@ -124,6 +148,24 @@ def test_generated_ci_is_pinned_least_privilege_and_offline_for_tests(
     assert "pip install --no-build-isolation --no-deps ." in workflow
     assert workflow.count("unshare --net") == 2
     assert 'requires = ["setuptools==80.9.0"]' in (stage / "pyproject.toml").read_text()
+
+
+def test_openclaw_docs_only_advertise_supported_spec_answer_option():
+    readme = (ROOT / "exports" / "openclaw" / "README.md").read_text(encoding="utf-8")
+    assert "`--answer`" not in readme
+    assert "--answer-file" in readme
+
+
+def test_ci_bundle_validator_paths_match_export_version():
+    builder = load_builder()
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    for runtime in builder.RUNTIMES:
+        expected = (
+            f"dist/stage/templeton-coding-loop-{runtime}-v{builder.VERSION}/"
+            "exports/validate_bundle.py"
+        )
+        assert expected in workflow
+    assert "v1.0.0/exports/validate_bundle.py" not in workflow
 
 
 def test_release_builder_rejects_source_and_stage_symlinks(tmp_path: Path):
@@ -219,8 +261,21 @@ def test_clean_bundle_install_and_tests_outside_extraction(
     validator = stage / "exports" / "validate_bundle.py"
     subprocess.run([sys.executable, str(validator)], cwd=stage, check=True)
     venv = tmp_path / f"venv-{runtime}"
-    subprocess.run([sys.executable, "-m", "venv", "--system-site-packages", str(venv)], check=True)
+    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
     python = venv / "bin" / "python"
+    subprocess.run(
+        [
+            str(python),
+            "-m",
+            "pip",
+            "install",
+            "--require-hashes",
+            "-r",
+            str(stage / "requirements-ci.lock"),
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
     subprocess.run(
         [str(python), "-m", "pip", "install", "--no-build-isolation", "--no-deps", str(stage)],
         cwd=tmp_path,
@@ -228,7 +283,17 @@ def test_clean_bundle_install_and_tests_outside_extraction(
     )
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
     subprocess.run(
-        [str(python), "-c", "import templeton_loop; print(templeton_loop.__version__)"],
+        [
+            str(python),
+            "-c",
+            (
+                "import pathlib, sys, templeton_loop; "
+                "package = pathlib.Path(templeton_loop.__file__).resolve(); "
+                "prefix = pathlib.Path(sys.prefix).resolve(); "
+                "assert package.is_relative_to(prefix), (package, prefix); "
+                "print(templeton_loop.__version__)"
+            ),
+        ],
         cwd=tmp_path,
         env=env,
         check=True,
@@ -240,7 +305,7 @@ def test_clean_bundle_install_and_tests_outside_extraction(
         check=True,
     )
     subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(stage / "tests")],
+        [str(python), "-m", "pytest", "-q", "-p", "no:cacheprovider", str(stage / "tests")],
         cwd=tmp_path,
         env=env,
         check=True,

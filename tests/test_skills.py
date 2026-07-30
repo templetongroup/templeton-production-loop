@@ -58,6 +58,30 @@ def test_human_gates_are_present_in_role_skills():
         assert "evidence freshness" in qa.lower()
 
 
+def test_spec_requires_guided_interview_before_issue_mutation():
+    required_contract = (
+        "Never run it unattended",
+        "bounded, secret-filtered repository and research context",
+        "Use only that bounded context",
+        "Look up facts inside the supplied context",
+        "Ask exactly one decision question at a time",
+        "provide the recommended answer first",
+        "Surface better options and new ideas",
+        "shared understanding",
+        "Do not create or update an issue at any point",
+        "Output an approved issue packet",
+        "Tony alone may apply",
+        "interview transcripts and chat are not hidden scope",
+    )
+    runtime_specs = []
+    for folder in present_runtime_skills():
+        spec = (ROOT / folder / "templeton-loop-spec/SKILL.md").read_text()
+        runtime_specs.append(spec)
+        for requirement in required_contract:
+            assert requirement in spec
+    assert len(set(runtime_specs)) == 1
+
+
 def test_openclaw_builder_requires_secret_filtered_staging():
     if not (ROOT / "skills-openclaw").is_dir():
         return

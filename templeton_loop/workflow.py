@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 from .boundaries import prepare_sink
 from .evidence import EvidenceError, Finding, RunLedger, evidence_freshness, redact, redact_text, validate_findings
+from .gitmeta import git_metadata_path
 from .routing import Outcome, append_outcome
 from .staging import apply_staged_tree, compare_tree, stage_source
 
@@ -343,7 +344,7 @@ def _run_verifiers(worktree: Path, config: LoopConfig) -> list[dict[str, Any]]:
 def _select_workspace(repo_root: Path, run_dir: Path, agent_workspace: Path | None) -> Path:
     if agent_workspace is None:
         return run_dir / "workspace"
-    base = repo_root.resolve() / ".git" / "templeton-loop" / "openclaw-workspaces"
+    base = git_metadata_path(repo_root, "templeton-loop/openclaw-workspaces")
     requested = agent_workspace.expanduser().absolute()
     if requested.parent != base.absolute():
         raise WorkflowError("OpenClaw agent workspace must be a direct child of the trusted workspace root")
@@ -356,7 +357,7 @@ def _select_workspace(repo_root: Path, run_dir: Path, agent_workspace: Path | No
 
 
 def _worktree(repo_root: Path, revision: str, branch: str) -> tuple[Path, Callable[[], None]]:
-    base = repo_root / ".git" / "templeton-loop" / "worktrees"
+    base = git_metadata_path(repo_root, "templeton-loop/worktrees")
     base.mkdir(parents=True, exist_ok=True)
     path = base / f"{branch.replace('/', '-')}-{uuid.uuid4().hex[:10]}"
     _run(["git", "worktree", "add", "--detach", str(path), revision], cwd=repo_root, timeout=300)
@@ -421,7 +422,7 @@ def broker_build(
 
     verify_local_verifier_image(repo.root, config)
     branch = f"loop/{run_id}"
-    run_dir = repo.root / ".git" / "templeton-loop" / "runs" / run_id
+    run_dir = git_metadata_path(repo.root, f"templeton-loop/runs/{run_id}")
     run_dir.mkdir(parents=True, exist_ok=False)
     ledger_path = run_dir / "events.jsonl"
     ledger = RunLedger(ledger_path)
@@ -587,7 +588,7 @@ def broker_build(
             "duration_ms": duration_ms,
         })
         append_outcome(
-            repo.root / ".git" / "templeton-loop" / "outcomes.jsonl",
+            git_metadata_path(repo.root, "templeton-loop/outcomes.jsonl"),
             Outcome("build", "runtime", "configured-agent", True, duration_ms, 1),
         )
         return {
@@ -621,7 +622,7 @@ def _run_staged_readonly_agent(
     agent_workspace: Path | None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     run_id = uuid.uuid4().hex
-    run_dir = repo.root / ".git" / "templeton-loop" / "runs" / run_id
+    run_dir = git_metadata_path(repo.root, f"templeton-loop/runs/{run_id}")
     run_dir.mkdir(parents=True, exist_ok=False)
     ledger_path = run_dir / "events.jsonl"
     ledger = RunLedger(ledger_path)
@@ -861,7 +862,18 @@ def broker_review(
             "current_sha": after_label.get("headRefOid"),
         }
     duration_ms = round((time.monotonic() - started) * 1000)
-    append_outcome(repo.root / ".git" / "templeton-loop" / "outcomes.jsonl", Outcome("review", "runtime", "configured-agent", verdict == "approved", duration_ms, 1, failure_class=None if verdict == "approved" else verdict))
+    append_outcome(
+        git_metadata_path(repo.root, "templeton-loop/outcomes.jsonl"),
+        Outcome(
+            "review",
+            "runtime",
+            "configured-agent",
+            verdict == "approved",
+            duration_ms,
+            1,
+            failure_class=None if verdict == "approved" else verdict,
+        ),
+    )
     return {"status": verdict, "role": "review", "candidate": vars(candidate), "reviewed_sha": reviewed_sha, "findings": [finding.to_dict() for finding in findings], "ci": ci, "mergeability": mergeability, "duration_ms": duration_ms, "ledger": str(ledger_path)}
 
 
@@ -961,12 +973,9 @@ def broker_qa(
         "duration_ms": round((time.monotonic() - started) * 1000),
         "ledger": str(ledger_path),
     }
-    output = (
-        repo.root
-        / ".git"
-        / "templeton-loop"
-        / "qa"
-        / f"pr-{candidate.number}-{reviewed_sha[:12]}-{uuid.uuid4().hex[:8]}.json"
+    output = git_metadata_path(
+        repo.root,
+        f"templeton-loop/qa/pr-{candidate.number}-{reviewed_sha[:12]}-{uuid.uuid4().hex[:8]}.json",
     )
     from .evidence import atomic_write_json
 

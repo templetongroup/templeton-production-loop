@@ -2,7 +2,7 @@
 
 Templeton Coding Loop is a human-gated software delivery system for bounded GitHub changes and independently verified artifact work. It combines deterministic host-side control with least-authority model workers for Hermes Agent and OpenClaw.
 
-Version: **1.0.0**
+Version: **1.1.0**
 
 ## Editions
 
@@ -17,9 +17,12 @@ Each generated repository has a fixed runtime identity. Its installed CLI does n
 
 ```text
 idea
+  → trusted host supplies bounded, secret-filtered repository context
+  → report-only guided interview
+  → shared-understanding confirmation
   → GitHub issue contract
   → pre-approval plan review
-  → human applies loop:agent-ready
+  → Tony applies loop:agent-ready
   → isolated staged build
   → deterministic host validation and branch/PR effects
   → fresh SHA-pinned review
@@ -85,6 +88,27 @@ templeton-loop install-skills --agent AGENT_ID --apply
 ### 3. Configure least-authority workers
 
 Hermes uses a dedicated `HERMES_HOME` and Docker terminal policy. OpenClaw uses one explicit sandboxed agent per role. See the edition README and `SECURITY.md`; runtime preflight fails closed if required settings are absent or drifted.
+
+For a new project or material change, use the brokered `run spec` flow—never invoke the installed spec skill directly. The host reads current GitHub issue metadata and tracked repository files, combines them with a trusted brief/research file, rejects sensitive paths and secret-positive or oversized payloads, and then invokes the report-only role with the exact runtime policy. Each invocation performs one stateful interview turn, verifies runtime policy again, and scans the model result before preserving it under Git's `templeton-loop/spec/` metadata path (`.git/templeton-loop/spec/` in a normal checkout, or the linked worktree's administrative directory).
+
+Spec state contains bounded, secret-filtered product context and interview history. It is mode-restricted, stays below `.git`, is excluded from source staging and release archives, and must still be handled as confidential local operator data.
+
+```bash
+# First turn; add --include for relevant tracked UTF-8 source/test files.
+templeton-loop run spec --repo /path/to/repo --session new-product \
+  --brief-file ./brief-and-research.md --include src/relevant.py --dry-run
+templeton-loop run spec --repo /path/to/repo --session new-product \
+  --brief-file ./brief-and-research.md --include src/relevant.py
+
+# One answer or correction per later turn.
+templeton-loop run spec --repo /path/to/repo --session new-product \
+  --answer-file ./answer.md
+
+# Only after reviewing the returned shared-understanding summary.
+templeton-loop run spec --repo /path/to/repo --session new-product --confirm
+```
+
+Add `--profile templeton` in the Hermes edition or `--agent templeton-spec` in the OpenClaw edition. The final output is a sink-checked issue packet labeled only `loop:spec-draft`; the broker never files it. Tony or the trusted host may file that packet. Tony alone may later apply `loop:agent-ready`.
 
 ### 4. Preview a role pass
 
@@ -157,8 +181,8 @@ shasum -a 256 -c SHA256SUMS       # macOS
 Validate staged bundles:
 
 ```bash
-python dist/stage/templeton-coding-loop-hermes-v1.0.0/exports/validate_bundle.py
-python dist/stage/templeton-coding-loop-openclaw-v1.0.0/exports/validate_bundle.py
+python dist/stage/templeton-coding-loop-hermes-v1.1.0/exports/validate_bundle.py
+python dist/stage/templeton-coding-loop-openclaw-v1.1.0/exports/validate_bundle.py
 ```
 
 The validator rejects missing, extra, altered, unsafe, or symlinked files and verifies `MANIFEST.json`, `MANIFEST.sha256`, version, runtime identity, skill inventory, and safety-contract markers. Internal manifests detect accidental or uncoordinated changes; they are not authenticity proofs. A `SHA256SUMS` file downloaded beside the archives is also insufficient unless its digest or signature was authenticated separately. For an authenticated repository checkout, you may additionally pin the externally reviewed manifest digest with `--expected-manifest-sha256 DIGEST`.
@@ -174,6 +198,6 @@ git diff --check
 
 ## Governance and provenance
 
-Tony or another authorized human applies `loop:agent-ready`, reviews the resulting PR and evidence, and merges. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
+Tony alone applies `loop:agent-ready`. Tony or another authorized human may review the resulting PR and evidence and merge. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
 
-Templeton Coding Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
+Templeton Coding Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
