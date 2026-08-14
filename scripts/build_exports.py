@@ -199,6 +199,8 @@ def stage_bundle(runtime: str) -> tuple[str, Path]:
     copy_tree(ROOT / "schemas", stage / "schemas")
     copy_tree(ROOT / "docs", stage / "docs")
     copy_tree(ROOT / "examples", stage / "examples")
+    copy_tree(ROOT / "optional-skills", stage / "optional-skills")
+    copy_tree(ROOT / "third_party", stage / "third_party")
     copy_tree(ROOT / "exports" / runtime, stage)
 
     skill_source = ROOT / ("skills-openclaw" if runtime == "openclaw" else "skills")
@@ -228,6 +230,12 @@ def stage_bundle(runtime: str) -> tuple[str, Path]:
         "Matt Pocock's MIT-licensed `grill-me`, `grilling`, and `grill-with-docs` skills "
         "at commit 2ab958093e83e0ec752e6c1c5932da465bf23e0c: "
         "https://github.com/mattpocock/skills\n\n"
+        "The optional architecture helper adapts Matt Pocock's MIT-licensed "
+        "`improve-codebase-architecture` and `codebase-design` skills at commit "
+        "8b78b531ab965735c5dc74f6f7a219e1e37326df. Upstream sources are vendored under "
+        "`third_party/mattpocock-skills/` and wrapped by "
+        "`optional-skills/templeton-architecture-review/`; they are not outer-loop "
+        "authority roles and do not auto-apply `loop:agent-ready`.\n\n"
         "MIT License\n\n"
         "Copyright (c) 2026 Matt Pocock\n\n"
         "Permission is hereby granted, free of charge, to any person obtaining a copy "

@@ -8,6 +8,19 @@ On 2026-07-30, the team reviewed Matt Pocock's MIT-licensed `mattpocock/skills` 
 
 The Templeton skill is independently expanded around trusted-host repository reconnaissance, secret-filtered context packets, per-turn runtime preflight, no-tools spec execution, issue-contract fields, Tony's GitHub approval gate, bounded issue size, deterministic sink checks, and the existing independent plan-review role. The spec role has no GitHub mutation phase. No upstream plugin, setup script, issue-tracker configuration, hooks, personal skills, or automatic update behavior is included. Generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
 
+## Improve Codebase Architecture (optional helper)
+
+On 2026-08-14, the team incorporated Matt Pocock's MIT-licensed `improve-codebase-architecture` and supporting `codebase-design` vocabulary from `mattpocock/skills` at pinned commit `8b78b531ab965735c5dc74f6f7a219e1e37326df`.
+
+Incorporation rules:
+
+- upstream sources are vendored under `third_party/mattpocock-skills/` with file digests;
+- Templeton ships a report-only wrapper at `optional-skills/templeton-architecture-review/`;
+- the wrapper may draft a `loop:spec-draft` issue packet for human filing, but never mutates source, labels, branches, PRs, or production;
+- it is intentionally **outside** the seven core outer-loop authority roles and is not auto-installed into live Hermes/OpenClaw profiles by the loop CLI;
+- upstream `triage`, `implement`, `to-tickets`, setup plugins, hooks, and automatic agent-ready behavior are not included;
+- generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
+
 ## Proof Runner v1.0
 
 Before Proof Runner was implemented, the team evaluated Nate Jones Media LLC's Ringer project to understand the product category and licensing boundary. Ringer is distributed under PolyForm Shield 1.0.0, not an OSI-approved permissive license.

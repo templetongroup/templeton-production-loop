@@ -282,8 +282,11 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
     notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     checks.update(
         {
-            "Matt Pocock pinned provenance": (
+            "Matt Pocock guided-interview pin": (
                 "2ab958093e83e0ec752e6c1c5932da465bf23e0c" in notices
+            ),
+            "Matt Pocock architecture pin": (
+                "8b78b531ab965735c5dc74f6f7a219e1e37326df" in notices
             ),
             "Matt Pocock copyright": "Copyright (c) 2026 Matt Pocock" in notices,
             "Matt Pocock MIT grant": "Permission is hereby granted, free of charge" in notices,
@@ -359,6 +362,32 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
             "supported 1.1 security line": "1.1.x is the supported release line" in security,
         }
     )
+
+    optional = ROOT / "optional-skills" / "templeton-architecture-review" / "SKILL.md"
+    if optional.is_file():
+        optional_text = optional.read_text(encoding="utf-8")
+        checks.update(
+            {
+                "optional architecture report-only": "report-only" in optional_text.lower(),
+                "optional architecture no agent-ready": "loop:agent-ready" in optional_text
+                and "Never" in optional_text,
+                "optional architecture no source mutation": "edit source" in optional_text,
+                "optional architecture outside core roles": (
+                    "not one of the seven" in optional_text.lower()
+                    or "outside" in optional_text.lower()
+                ),
+                "optional architecture upstream pin": (
+                    "8b78b531ab965735c5dc74f6f7a219e1e37326df" in optional_text
+                ),
+            }
+        )
+    vendor_pin = ROOT / "third_party" / "mattpocock-skills" / "PINNED.md"
+    if vendor_pin.is_file():
+        pin_text = vendor_pin.read_text(encoding="utf-8")
+        checks["vendored architecture pin file"] = (
+            "8b78b531ab965735c5dc74f6f7a219e1e37326df" in pin_text
+        )
+
     failed = [name for name, passed in checks.items() if not passed]
     if failed:
         fail("Safety contract validation failed: " + ", ".join(failed))

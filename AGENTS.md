@@ -10,3 +10,4 @@ This repository implements the Templeton Production Loop.
 - Strategy and worker model roles must remain explicit in plans and evidence: use the high-capability model for one bounded strategy pass, then route execution to the cheaper default worker model unless a task explicitly overrides it.
 - Add tests for changes to labels, candidate selection, SHA pinning, agent commands, locking, model routing, proof workspaces, verifier behavior, evidence writes, or safety gates.
 - Do not print or store credentials.
+- Optional helpers under `optional-skills/` are report-only and outside outer-loop authority; they must not apply `loop:agent-ready` or mutate GitHub/source state.

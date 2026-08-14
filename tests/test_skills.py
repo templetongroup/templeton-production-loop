@@ -105,3 +105,34 @@ def test_proof_skills_preserve_v1_boundaries():
     assert "auto-update" in prove.lower()
     assert "global hooks" in prove.lower()
     assert "Ringer-derived code or assets" in prove
+
+
+def test_optional_architecture_review_is_report_only_and_outside_core_inventory():
+    optional = ROOT / "optional-skills" / "templeton-architecture-review" / "SKILL.md"
+    assert optional.is_file()
+    text = optional.read_text()
+    assert text.startswith("---\n")
+    assert "name: templeton-architecture-review\n" in text
+    assert "report-only" in text.lower()
+    assert "loop:agent-ready" in text
+    assert "Never" in text
+    assert "edit source" in text
+    assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in text
+    # must not leak into core runtime skill inventories
+    for folder, expected in present_runtime_skills().items():
+        assert "templeton-architecture-review" not in expected
+        actual = {path.name for path in (ROOT / folder).iterdir() if path.is_dir()}
+        assert "templeton-architecture-review" not in actual
+
+
+def test_vendored_mattpocock_architecture_sources_are_pinned():
+    vendor = ROOT / "third_party" / "mattpocock-skills"
+    assert (vendor / "PINNED.md").is_file()
+    assert (vendor / "UPSTREAM_FILES.json").is_file()
+    assert (vendor / "improve-codebase-architecture" / "SKILL.md").is_file()
+    assert (vendor / "codebase-design" / "SKILL.md").is_file()
+    assert (vendor / "LICENSE").is_file()
+    pin = (vendor / "PINNED.md").read_text()
+    assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in pin
+    license_text = (vendor / "LICENSE").read_text()
+    assert "Copyright (c) 2026 Matt Pocock" in license_text

@@ -204,10 +204,20 @@ Inner Proof Runner graph authoring and post-pilot DAG primitives are documented 
 
 Use those patterns to sharpen task fan-out, independent lenses, and verifier anchors. They do not replace the outer GitHub/human-governance loop.
 
+## Optional architecture review
+
+For codebase deepening opportunities before filing work into the loop, use the optional report-only helper:
+
+- `optional-skills/templeton-architecture-review/SKILL.md`
+- vendored upstream sources: `third_party/mattpocock-skills/`
+- research note: `docs/research/2026-08-14-mattpocock-improve-codebase-architecture.md`
+
+This helper adapts Matt Pocock's MIT-licensed `improve-codebase-architecture` flow: scan hot spots, produce a temp HTML candidate report, grill one candidate, and return a `loop:spec-draft` issue packet for human filing. It is not one of the seven outer-loop authority roles and never applies `loop:agent-ready`, edits source, or mutates GitHub state.
+
 ## Governance and provenance
 
 Only the designated human operator applies `loop:agent-ready`. An authorized human may review the resulting PR and evidence and merge. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
 
-Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
+Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Its optional architecture helper adapts `improve-codebase-architecture` and `codebase-design` under the same MIT attribution model. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
 
 CLI and Python import names remain `templeton-loop` / `templeton_loop` for compatibility.

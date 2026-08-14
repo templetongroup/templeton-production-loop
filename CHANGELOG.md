@@ -4,6 +4,13 @@ All notable changes to Templeton Production Loop are documented here.
 
 ## Unreleased
 
+### Added
+- Optional architecture helper adapted from Matt Pocock's `improve-codebase-architecture` + `codebase-design` (pinned `8b78b531ab965735c5dc74f6f7a219e1e37326df`):
+  - vendored sources in `third_party/mattpocock-skills/`
+  - Templeton-native report-only wrapper `optional-skills/templeton-architecture-review/`
+  - research note `docs/research/2026-08-14-mattpocock-improve-codebase-architecture.md`
+- The optional helper is not part of the seven outer-loop authority roles and cannot apply `loop:agent-ready`.
+
 ### Changed
 - Public product name is **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop`.
 - Added `docs/research/2026-08-14-graph-patterns-in-proof-runner.md` for inner Proof Runner graph patterns.
