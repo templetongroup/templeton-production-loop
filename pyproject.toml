@@ -3,9 +3,9 @@ requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "templeton-coding-loop"
+name = "templeton-production-loop"
 version = "1.1.0"
-description = "Human-gated GitHub coding loop and runtime-neutral artifact proof runner"
+description = "Human-gated GitHub production loop and runtime-neutral artifact proof runner"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

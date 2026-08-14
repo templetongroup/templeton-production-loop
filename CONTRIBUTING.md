@@ -14,8 +14,8 @@ Contributions are welcome when they preserve the project's human gates, verifica
    python -m compileall -q templeton_loop tests scripts
    git diff --check
    python scripts/build_exports.py
-   python dist/stage/templeton-coding-loop-hermes-v1.1.0/exports/validate_bundle.py
-   python dist/stage/templeton-coding-loop-openclaw-v1.1.0/exports/validate_bundle.py
+   python dist/stage/templeton-production-loop-hermes-v1.1.0/exports/validate_bundle.py
+   python dist/stage/templeton-production-loop-openclaw-v1.1.0/exports/validate_bundle.py
    ```
 
 4. Do not include credentials, private logs, generated run evidence, model transcripts, or local absolute paths.

@@ -1,10 +1,10 @@
 # Provenance and Independent Implementation
 
-Templeton Coding Loop is original MIT-licensed work by The Templeton Group built on general software-engineering practices and an acknowledged adaptation of Alex Finn's MIT-licensed Finn-loop workflow concepts.
+Templeton Production Loop is original MIT-licensed work by The Templeton Group built on general software-engineering practices and an acknowledged adaptation of Alex Finn's MIT-licensed Finn-loop workflow concepts.
 
 ## Guided Interview
 
-On 2026-07-30, the team reviewed Matt Pocock's MIT-licensed `mattpocock/skills` repository at pinned commit `2ab958093e83e0ec752e6c1c5932da465bf23e0c`. Templeton Coding Loop v1.1 adapts the bounded interaction model from `grill-me`, `grilling`, and `grill-with-docs`: the trusted host researches retrievable facts, the first-class `templeton-loop run spec` broker prepares and scans the bounded packet and digest-checked transcript, the report-only role asks one decision at a time with a recommendation, dependent choices are resolved in order, and explicit confirmed shared understanding is required before producing an issue packet.
+On 2026-07-30, the team reviewed Matt Pocock's MIT-licensed `mattpocock/skills` repository at pinned commit `2ab958093e83e0ec752e6c1c5932da465bf23e0c`. Templeton Production Loop v1.1 adapts the bounded interaction model from `grill-me`, `grilling`, and `grill-with-docs`: the trusted host researches retrievable facts, the first-class `templeton-loop run spec` broker prepares and scans the bounded packet and digest-checked transcript, the report-only role asks one decision at a time with a recommendation, dependent choices are resolved in order, and explicit confirmed shared understanding is required before producing an issue packet.
 
 The Templeton skill is independently expanded around trusted-host repository reconnaissance, secret-filtered context packets, per-turn runtime preflight, no-tools spec execution, issue-contract fields, Tony's GitHub approval gate, bounded issue size, deterministic sink checks, and the existing independent plan-review role. The spec role has no GitHub mutation phase. No upstream plugin, setup script, issue-tracker configuration, hooks, personal skills, or automatic update behavior is included. Generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
 

@@ -77,7 +77,7 @@ def verify_hermes_runtime(
         marker_data = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimePolicyError(f"Dedicated runtime marker is invalid: {marker}") from exc
-    if marker_data != {"product": "templeton-coding-loop", "schema": 1}:
+    if marker_data != {"product": "templeton-production-loop", "schema": 1}:
         raise RuntimePolicyError("Dedicated runtime marker has unexpected content")
     policy = get_role_policy(role)
     if not policy.writable_workspace:

@@ -38,7 +38,7 @@ This concentrates expensive reasoning into one bounded strategy artifact while a
 
 ## Procedure
 
-From the Templeton Coding Loop checkout or installed bundle:
+From the Templeton Production Loop checkout or installed bundle:
 
 ```bash
 # Validate schema and safety constraints; makes no model calls.

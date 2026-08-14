@@ -2,7 +2,7 @@
 
 ## Supported release
 
-Templeton Coding Loop 1.1.x is the supported release line.
+Templeton Production Loop 1.1.x is the supported release line.
 
 ## Trust model
 

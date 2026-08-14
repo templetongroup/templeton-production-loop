@@ -68,7 +68,7 @@ def test_verify_hermes_runtime_requires_dedicated_air_gapped_config(
     home = tmp_path / "hermes-home"
     home.mkdir()
     (home / "TEMPLETON_RUNTIME.json").write_text(
-        json.dumps({"product": "templeton-coding-loop", "schema": 1}), encoding="utf-8"
+        json.dumps({"product": "templeton-production-loop", "schema": 1}), encoding="utf-8"
     )
     config = {
         "backend": "docker",
@@ -120,7 +120,7 @@ def test_denial_canary_selected_hermes_profile_is_the_profile_preflighted(
     home = tmp_path / "hermes-home"
     home.mkdir()
     (home / "TEMPLETON_RUNTIME.json").write_text(
-        json.dumps({"product": "templeton-coding-loop", "schema": 1}), encoding="utf-8"
+        json.dumps({"product": "templeton-production-loop", "schema": 1}), encoding="utf-8"
     )
     config = {
         "backend": "docker",
@@ -168,7 +168,7 @@ def test_hermes_report_roles_require_no_host_or_terminal_tool(tmp_path: Path):
     home = tmp_path / "hermes-home"
     home.mkdir()
     (home / "TEMPLETON_RUNTIME.json").write_text(
-        json.dumps({"product": "templeton-coding-loop", "schema": 1}), encoding="utf-8"
+        json.dumps({"product": "templeton-production-loop", "schema": 1}), encoding="utf-8"
     )
 
     result = verify_hermes_runtime(

@@ -1,4 +1,4 @@
-# gstack concept review for Templeton Coding Loop
+# gstack concept review for Templeton Production Loop
 
 Date: 2026-07-23
 Reviewer: Nikki Templeton

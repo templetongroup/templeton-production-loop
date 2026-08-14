@@ -56,13 +56,13 @@ def test_archives_are_reproducible_and_safe(tmp_path: Path, monkeypatch: pytest.
     monkeypatch.setattr(builder, "DIST", dist)
     monkeypatch.setattr(builder, "STAGE", dist / "stage")
     dist.mkdir()
-    (dist / "templeton-coding-loop-hermes-v0.3.0.zip").write_bytes(b"stale")
+    (dist / "templeton-production-loop-hermes-v0.3.0.zip").write_bytes(b"stale")
     (dist / "exports.json").write_text('{"path":"/private/stale"}\n', encoding="utf-8")
     assert builder.main() == 0
     assert not (dist / "exports.json").exists()
     assert {path.name for path in dist.glob("*.zip")} == {
-        "templeton-coding-loop-hermes-v1.1.0.zip",
-        "templeton-coding-loop-openclaw-v1.1.0.zip",
+        "templeton-production-loop-hermes-v1.1.0.zip",
+        "templeton-production-loop-openclaw-v1.1.0.zip",
     }
     before = {path.name: sha256(path) for path in dist.glob("*.zip")}
     assert builder.main() == 0
@@ -161,7 +161,7 @@ def test_ci_bundle_validator_paths_match_export_version():
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     for runtime in builder.RUNTIMES:
         expected = (
-            f"dist/stage/templeton-coding-loop-{runtime}-v{builder.VERSION}/"
+            f"dist/stage/templeton-production-loop-{runtime}-v{builder.VERSION}/"
             "exports/validate_bundle.py"
         )
         assert expected in workflow

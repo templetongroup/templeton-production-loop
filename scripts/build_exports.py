@@ -97,10 +97,10 @@ def copy_tree(source: Path, destination: Path) -> None:
 
 def runtime_pyproject(runtime: str) -> str:
     source = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    source = source.replace('name = "templeton-coding-loop"', f'name = "templeton-coding-loop-{runtime}"')
+    source = source.replace('name = "templeton-production-loop"', f'name = "templeton-production-loop-{runtime}"')
     source = source.replace(
-        'description = "Human-gated GitHub coding loop and runtime-neutral artifact proof runner"',
-        f'description = "Templeton Coding Loop {runtime.title()} edition"',
+        'description = "Human-gated GitHub production loop and runtime-neutral artifact proof runner"',
+        f'description = "Templeton Production Loop {runtime.title()} edition"',
     )
     return source
 
@@ -183,7 +183,7 @@ def normalize_modes(stage: Path) -> None:
 def stage_bundle(runtime: str) -> tuple[str, Path]:
     if runtime not in RUNTIMES:
         raise ValueError(f"Unsupported release runtime: {runtime}")
-    name = f"templeton-coding-loop-{runtime}-v{VERSION}"
+    name = f"templeton-production-loop-{runtime}-v{VERSION}"
     stage = STAGE / name
     if stage.exists():
         shutil.rmtree(stage)
@@ -222,7 +222,7 @@ def stage_bundle(runtime: str) -> tuple[str, Path]:
     (stage / "VERSION").write_text(VERSION + "\n", encoding="utf-8")
     (stage / "THIRD_PARTY_NOTICES.md").write_text(
         "# Third-Party Notices\n\n"
-        "Templeton Coding Loop is an MIT-licensed adaptation of Alex Finn's Finn-loop: "
+        "Templeton Production Loop is an MIT-licensed adaptation of Alex Finn's Finn-loop: "
         "https://github.com/finna/Finn-loop\n\n"
         "The guided-interview behavior in `templeton-loop-spec` adapts concepts from "
         "Matt Pocock's MIT-licensed `grill-me`, `grilling`, and `grill-with-docs` skills "
@@ -281,7 +281,7 @@ def archive_bundle(name: str, stage: Path) -> Path:
 
 def main() -> int:
     DIST.mkdir(parents=True, exist_ok=True)
-    for stale in DIST.glob("templeton-coding-loop-*-v*.zip"):
+    for stale in DIST.glob("templeton-production-loop-*-v*.zip"):
         stale.unlink()
     (DIST / "SHA256SUMS").unlink(missing_ok=True)
     (DIST / "exports.json").unlink(missing_ok=True)

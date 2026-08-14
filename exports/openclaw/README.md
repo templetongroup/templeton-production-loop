@@ -1,4 +1,4 @@
-# Templeton Coding Loop — OpenClaw Edition
+# Templeton Production Loop — OpenClaw Edition
 
 Version **1.1.0**. This standalone repository is fixed to OpenClaw; the CLI has no `--runtime` option. Its coding-loop roles and live `prove` command execute through explicit OpenClaw adapters. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
 

@@ -1,6 +1,6 @@
-# Templeton Coding Loop v1 implementation plan
+# Templeton Production Loop v1 implementation plan
 
-**Goal:** ship a release-ready, clean-room Templeton Coding Loop kernel with deterministic evidence, enforced runtime capabilities, measured routing, host-specific Hermes/OpenClaw adapters, and two independently installable private GitHub repositories.
+**Goal:** ship a release-ready, clean-room Templeton Production Loop kernel with deterministic evidence, enforced runtime capabilities, measured routing, host-specific Hermes/OpenClaw adapters, and two independently installable private GitHub repositories.
 
 ## Product contract
 
@@ -61,7 +61,7 @@
 3. Rebuild twice and compare artifact digests.
 4. Clean-install and validate each standalone edition.
 5. Independent specification and security reviews; close release-blocking findings.
-6. Initialize standalone `templeton-coding-loop-hermes` and `templeton-coding-loop-openclaw` repositories, create initial release commits/tags, publish private GitHub repositories, and verify clones/install/help/tests.
+6. Initialize standalone `templeton-production-loop-hermes` and `templeton-production-loop-openclaw` repositories, create initial release commits/tags, publish private GitHub repositories, and verify clones/install/help/tests.
 
 ## Release evidence
 

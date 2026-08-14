@@ -1,15 +1,15 @@
-# Templeton Coding Loop
+# Templeton Production Loop
 
-Templeton Coding Loop is a human-gated software delivery system for bounded GitHub changes and independently verified artifact work. It combines deterministic host-side control with least-authority model workers for Hermes Agent and OpenClaw.
+Templeton Production Loop is a human-gated software delivery system for bounded GitHub changes and independently verified artifact work. It combines deterministic host-side control with least-authority model workers for Hermes Agent and OpenClaw.
 
 Version: **1.1.0**
 
 ## Editions
 
-The release generator produces two standalone private repositories:
+The release generator produces two standalone runtime editions:
 
-- `templeton-coding-loop-hermes` — Hermes roles plus the artifact proof runner.
-- `templeton-coding-loop-openclaw` — OpenClaw-native coding-loop roles plus live artifact proof execution through an explicit adapter and a dedicated empty one-shot workspace.
+- `templeton-production-loop-hermes` — Hermes roles plus the artifact proof runner.
+- `templeton-production-loop-openclaw` — OpenClaw-native production-loop roles plus live artifact proof execution through an explicit adapter and a dedicated empty one-shot workspace.
 
 Each generated repository has a fixed runtime identity. Its installed CLI does not expose a runtime switch.
 
@@ -22,7 +22,7 @@ idea
   → shared-understanding confirmation
   → GitHub issue contract
   → pre-approval plan review
-  → Tony applies loop:agent-ready
+  → designated human applies loop:agent-ready
   → isolated staged build
   → deterministic host validation and branch/PR effects
   → fresh SHA-pinned review
@@ -108,7 +108,7 @@ templeton-loop run spec --repo /path/to/repo --session new-product \
 templeton-loop run spec --repo /path/to/repo --session new-product --confirm
 ```
 
-Add `--profile templeton` in the Hermes edition or `--agent templeton-spec` in the OpenClaw edition. The final output is a sink-checked issue packet labeled only `loop:spec-draft`; the broker never files it. Tony or the trusted host may file that packet. Tony alone may later apply `loop:agent-ready`.
+Add `--profile templeton` in the Hermes edition or `--agent templeton-spec` in the OpenClaw edition. The final output is a sink-checked issue packet labeled only `loop:spec-draft`; the broker never files it. A trusted host may file that packet. Only the designated human operator may later apply `loop:agent-ready`.
 
 ### 4. Preview a role pass
 
@@ -170,7 +170,7 @@ After artifacts exist, verify that a fresh deterministic build is identical with
 python scripts/build_exports.py --check
 ```
 
-`dist/SHA256SUMS` is a detached checksum list, not a self-authenticating signature. Obtain or approve its digest through an independent authenticated channel (for example, a reviewed private-repository commit, signed tag, or release attestation), then verify the archives **before** extraction or installation:
+`dist/SHA256SUMS` is a detached checksum list, not a self-authenticating signature. Obtain or approve its digest through an independent authenticated channel (for example, a reviewed repository commit, signed tag, or release attestation), then verify the archives **before** extraction or installation:
 
 ```bash
 cd dist
@@ -181,8 +181,8 @@ shasum -a 256 -c SHA256SUMS       # macOS
 Validate staged bundles:
 
 ```bash
-python dist/stage/templeton-coding-loop-hermes-v1.1.0/exports/validate_bundle.py
-python dist/stage/templeton-coding-loop-openclaw-v1.1.0/exports/validate_bundle.py
+python dist/stage/templeton-production-loop-hermes-v1.1.0/exports/validate_bundle.py
+python dist/stage/templeton-production-loop-openclaw-v1.1.0/exports/validate_bundle.py
 ```
 
 The validator rejects missing, extra, altered, unsafe, or symlinked files and verifies `MANIFEST.json`, `MANIFEST.sha256`, version, runtime identity, skill inventory, and safety-contract markers. Internal manifests detect accidental or uncoordinated changes; they are not authenticity proofs. A `SHA256SUMS` file downloaded beside the archives is also insufficient unless its digest or signature was authenticated separately. For an authenticated repository checkout, you may additionally pin the externally reviewed manifest digest with `--expected-manifest-sha256 DIGEST`.
@@ -196,8 +196,18 @@ python scripts/build_exports.py
 git diff --check
 ```
 
+## Graph patterns
+
+Inner Proof Runner graph authoring and post-pilot DAG primitives are documented in:
+
+- `docs/research/2026-08-14-graph-patterns-in-proof-runner.md`
+
+Use those patterns to sharpen task fan-out, independent lenses, and verifier anchors. They do not replace the outer GitHub/human-governance loop.
+
 ## Governance and provenance
 
-Tony alone applies `loop:agent-ready`. Tony or another authorized human may review the resulting PR and evidence and merge. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
+Only the designated human operator applies `loop:agent-ready`. An authorized human may review the resulting PR and evidence and merge. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
 
-Templeton Coding Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
+Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
+
+CLI and Python import names remain `templeton-loop` / `templeton_loop` for compatibility.

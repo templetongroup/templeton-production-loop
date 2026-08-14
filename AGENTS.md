@@ -1,6 +1,6 @@
 # Repository Instructions
 
-This repository implements the Templeton coding loop.
+This repository implements the Templeton Production Loop.
 
 - Preserve the hard boundary: agents may spec, build, test, push branches, open PRs, and post loop verdicts; humans merge and authorize deployments.
 - GitHub Issues are the durable work contract. Do not add another issue tracker without a real adapter and migration plan.

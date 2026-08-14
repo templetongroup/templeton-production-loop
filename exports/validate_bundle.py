@@ -184,7 +184,7 @@ def validate_runtime(manifest: dict[str, Any]) -> tuple[str, set[str]]:
     expected = CORE_SKILLS if runtime == "openclaw" else HERMES_SKILLS
 
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    expected_name = f"templeton-coding-loop-{runtime}-v{version}"
+    expected_name = f"templeton-production-loop-{runtime}-v{version}"
     if manifest["runtime"] != runtime or manifest["version"] != version or manifest["name"] != expected_name:
         fail(
             "Manifest identity mismatch: "
@@ -192,7 +192,7 @@ def validate_runtime(manifest: dict[str, Any]) -> tuple[str, set[str]]:
         )
 
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    if pyproject.get("name") != f"templeton-coding-loop-{runtime}" or pyproject.get("version") != version:
+    if pyproject.get("name") != f"templeton-production-loop-{runtime}" or pyproject.get("version") != version:
         fail("pyproject.toml identity does not match the bundle")
     init_text = (ROOT / "templeton_loop" / "__init__.py").read_text(encoding="utf-8")
     if f'__version__ = "{version}"' not in init_text:

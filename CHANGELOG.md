@@ -1,6 +1,12 @@
 # Changelog
 
-All notable changes to Templeton Coding Loop are documented here.
+All notable changes to Templeton Production Loop are documented here.
+
+## Unreleased
+
+### Changed
+- Public product name is **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop`.
+- Added `docs/research/2026-08-14-graph-patterns-in-proof-runner.md` for inner Proof Runner graph patterns.
 
 ## 1.1.0 — 2026-07-30
 

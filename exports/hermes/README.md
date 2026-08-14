@@ -1,4 +1,4 @@
-# Templeton Coding Loop — Hermes Edition
+# Templeton Production Loop — Hermes Edition
 
 Version **1.1.0**. This standalone repository is fixed to Hermes; the CLI has no `--runtime` option.
 
@@ -30,7 +30,7 @@ Run the validator before installation or tests create unmanifested build/cache f
 Do not run model workers through your everyday Hermes profile. Create a dedicated runtime home containing this exact marker:
 
 ```json
-{"product":"templeton-coding-loop","schema":1}
+{"product":"templeton-production-loop","schema":1}
 ```
 
 Save it as `$HERMES_HOME/TEMPLETON_RUNTIME.json`. Configure that Hermes home with a model provider and the following terminal policy:

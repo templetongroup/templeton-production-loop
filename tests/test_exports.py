@@ -57,7 +57,7 @@ def test_generated_editions_are_fixed_installable_and_valid(staged_editions: dic
         edition = (stage / "templeton_loop" / "edition.py").read_text(encoding="utf-8")
         assert f"EDITION: str | None = '{runtime}'" in edition
         project = (stage / "pyproject.toml").read_text(encoding="utf-8")
-        assert f'name = "templeton-coding-loop-{runtime}"' in project
+        assert f'name = "templeton-production-loop-{runtime}"' in project
         assert 'version = "1.1.0"' in project
 
     hermes_help = subprocess.run(
@@ -205,7 +205,7 @@ def test_release_check_rejects_extra_nodes_symlinks_and_stage_drift(
     monkeypatch.setattr(builder, "STAGE", dist / "stage")
     builder.main()
 
-    extra = dist / "templeton-coding-loop-hermes-v0.9.0.zip"
+    extra = dist / "templeton-production-loop-hermes-v0.9.0.zip"
     extra.write_bytes(b"stale")
     with pytest.raises(RuntimeError, match="unexpected"):
         builder.check_outputs()
@@ -223,7 +223,7 @@ def test_release_check_rejects_extra_nodes_symlinks_and_stage_drift(
         builder.check_outputs()
     builder.main()
 
-    archive = dist / "templeton-coding-loop-hermes-v1.1.0.zip"
+    archive = dist / "templeton-production-loop-hermes-v1.1.0.zip"
     external = tmp_path / "external.zip"
     shutil.copyfile(archive, external)
     archive.unlink()

@@ -32,6 +32,6 @@ jobs:
       - name: Build both deterministic editions
         run: python scripts/build_exports.py
       - name: Validate Hermes bundle
-        run: python dist/stage/templeton-coding-loop-hermes-v1.1.0/exports/validate_bundle.py
+        run: python dist/stage/templeton-production-loop-hermes-v1.1.0/exports/validate_bundle.py
       - name: Validate OpenClaw bundle
-        run: python dist/stage/templeton-coding-loop-openclaw-v1.1.0/exports/validate_bundle.py
+        run: python dist/stage/templeton-production-loop-openclaw-v1.1.0/exports/validate_bundle.py
