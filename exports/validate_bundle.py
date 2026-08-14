@@ -363,30 +363,58 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
         }
     )
 
-    optional = ROOT / "optional-skills" / "templeton-architecture-review" / "SKILL.md"
-    if optional.is_file():
-        optional_text = optional.read_text(encoding="utf-8")
-        checks.update(
-            {
-                "optional architecture report-only": "report-only" in optional_text.lower(),
-                "optional architecture no agent-ready": "loop:agent-ready" in optional_text
-                and "Never" in optional_text,
-                "optional architecture no source mutation": "edit source" in optional_text,
-                "optional architecture outside core roles": (
-                    "not one of the seven" in optional_text.lower()
-                    or "outside" in optional_text.lower()
-                ),
-                "optional architecture upstream pin": (
-                    "8b78b531ab965735c5dc74f6f7a219e1e37326df" in optional_text
-                ),
-            }
-        )
+    optional_root = ROOT / "optional-skills"
+    expected_optional = {
+        "templeton-architecture-review",
+        "templeton-grill",
+        "templeton-handoff",
+        "templeton-questionnaire",
+        "templeton-wait-what",
+        "templeton-writing-for-agents",
+    }
+    if optional_root.is_dir():
+        actual_optional = {
+            path.name for path in optional_root.iterdir() if path.is_dir()
+        }
+        checks["optional skill inventory"] = expected_optional.issubset(actual_optional)
+        for name in sorted(expected_optional & actual_optional):
+            optional_text = (optional_root / name / "SKILL.md").read_text(encoding="utf-8")
+            prefix = f"optional {name}"
+            checks[f"{prefix} report-only"] = (
+                "report-only" in optional_text.lower() or "Optional" in optional_text
+            )
+            checks[f"{prefix} no agent-ready"] = (
+                "loop:agent-ready" in optional_text and "Never" in optional_text
+            )
+            checks[f"{prefix} outside core roles"] = (
+                "not one of the seven" in optional_text.lower()
+                or "outside" in optional_text.lower()
+                or "optional-helper" in optional_text
+            )
+            checks[f"{prefix} upstream pin"] = (
+                "8b78b531ab965735c5dc74f6f7a219e1e37326df" in optional_text
+            )
     vendor_pin = ROOT / "third_party" / "mattpocock-skills" / "PINNED.md"
     if vendor_pin.is_file():
         pin_text = vendor_pin.read_text(encoding="utf-8")
-        checks["vendored architecture pin file"] = (
+        checks["vendored mattpocock pin file"] = (
             "8b78b531ab965735c5dc74f6f7a219e1e37326df" in pin_text
         )
+        checks["vendored productivity selection"] = (
+            "skills/productivity/handoff" in pin_text
+            and "skills/productivity/teach" in pin_text
+        )
+    vendor_prod = ROOT / "third_party" / "mattpocock-skills" / "productivity"
+    if vendor_prod.is_dir():
+        checks["vendored productivity handoff"] = (
+            vendor_prod / "handoff" / "SKILL.md"
+        ).is_file()
+        checks["vendored productivity grilling"] = (
+            vendor_prod / "grilling" / "SKILL.md"
+        ).is_file()
+        checks["vendored productivity writing-for-agents"] = (
+            vendor_prod / "writing-for-agents" / "SKILL.md"
+        ).is_file()
 
     failed = [name for name, passed in checks.items() if not passed]
     if failed:

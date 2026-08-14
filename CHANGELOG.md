@@ -9,7 +9,14 @@ All notable changes to Templeton Production Loop are documented here.
   - vendored sources in `third_party/mattpocock-skills/`
   - Templeton-native report-only wrapper `optional-skills/templeton-architecture-review/`
   - research note `docs/research/2026-08-14-mattpocock-improve-codebase-architecture.md`
-- The optional helper is not part of the seven outer-loop authority roles and cannot apply `loop:agent-ready`.
+- Selected Matt Pocock productivity helpers (same pin), vendored under `third_party/mattpocock-skills/productivity/` with Templeton wrappers:
+  - `optional-skills/templeton-grill`
+  - `optional-skills/templeton-handoff`
+  - `optional-skills/templeton-questionnaire`
+  - `optional-skills/templeton-wait-what`
+  - `optional-skills/templeton-writing-for-agents`
+  - research note `docs/research/2026-08-14-mattpocock-productivity-selection.md`
+- Optional helpers are not part of the seven outer-loop authority roles and cannot apply `loop:agent-ready`. `teach` was evaluated and not incorporated.
 
 ### Changed
 - Public product name is **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop`.

@@ -47,9 +47,108 @@
       "git_blob_sha": "706fdca096da5937fe57875a9154017d50668c42",
       "path": "improve-codebase-architecture/agents/openai.yaml",
       "sha256": "c8cb20f68ebf0edb4e497bc11ae5fcaa196004e661cd189015b04f4109ced7f1"
+    },
+    {
+      "bytes": 1503,
+      "git_blob_sha": "21bc1781e0276608b853bc71d3613c2ad06ac77b",
+      "path": "productivity/README.md",
+      "sha256": "f50213d4832e9420b6b5b32df07eecc2d663cad7c0083b72274c33a3546d854b"
+    },
+    {
+      "bytes": 147,
+      "git_blob_sha": "9470cfcfe231a35e46494cddbacdd395991afb1e",
+      "path": "productivity/grill-me/SKILL.md",
+      "sha256": "6189dfceb7304a6e5558f75d87e68fa3bc7fcf7ba120e44f21f8a61fe01eba54"
+    },
+    {
+      "bytes": 137,
+      "git_blob_sha": "4d6fb0c746c5d21364dce5d0cf8c51eab9712e7b",
+      "path": "productivity/grill-me/agents/openai.yaml",
+      "sha256": "c061e39c3e0f9d865fb1b97556d485704af2a8a58f4b8221a8917a5c2074a32b"
+    },
+    {
+      "bytes": 1872,
+      "git_blob_sha": "95bd01ee9049a7e08120d54af9cd6ceeef282335",
+      "path": "productivity/grilling/SKILL.md",
+      "sha256": "fa5c1e5ee76b1c8f1ae56101f52c9e239de75d5c578adc61227b92d10b7e52ef"
+    },
+    {
+      "bytes": 113,
+      "git_blob_sha": "ddbdb96139c0c1dfe6bca698f39d0465674b8a39",
+      "path": "productivity/grilling/agents/openai.yaml",
+      "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b"
+    },
+    {
+      "bytes": 879,
+      "git_blob_sha": "043d9e13dc7eca3002a47d3ab9865c568f647863",
+      "path": "productivity/handoff/SKILL.md",
+      "sha256": "57c9f1f392d7352cdc85b1e39ca49eddc70ce1dc278bd9653fb4f23dfc2560fc"
+    },
+    {
+      "bytes": 141,
+      "git_blob_sha": "6e1d8da121beceddc2f9ec7fa8714c1d914dd11a",
+      "path": "productivity/handoff/agents/openai.yaml",
+      "sha256": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28"
+    },
+    {
+      "bytes": 2921,
+      "git_blob_sha": "1423375bb23923a754e931f034a9714b8f81dfcc",
+      "path": "productivity/to-questionnaire/SKILL.md",
+      "sha256": "8e7f9ed8d7b2e66babf1a54aee9b94319bf38c32619cffe78819df6518ead5fc"
+    },
+    {
+      "bytes": 166,
+      "git_blob_sha": "a58d14765beb4acb4c9708b516310558e1308a22",
+      "path": "productivity/to-questionnaire/agents/openai.yaml",
+      "sha256": "9e8a06c38c8842eea8d4922cb9d1ead8e3ace647bab259b943c994a1b4742bc2"
+    },
+    {
+      "bytes": 325,
+      "git_blob_sha": "d493cfa883645bb7ce2e12f5232c0fbe3a0b9f87",
+      "path": "productivity/wait-what/SKILL.md",
+      "sha256": "8923f7df1a0d1b138281658e134caa4bf1c618d2876a2323b19acdfdffebc024"
+    },
+    {
+      "bytes": 161,
+      "git_blob_sha": "ba77f1c967700d7c6574ba70b0dd585056c98b7f",
+      "path": "productivity/wait-what/agents/openai.yaml",
+      "sha256": "3ec661af8fc7063b650518c95ab775bbeabaefce38b89acaf6da2f749168f37e"
+    },
+    {
+      "bytes": 2651,
+      "git_blob_sha": "c28e3bf035403080a849ac4b7816d3af93d145ff",
+      "path": "productivity/writing-for-agents/SKILL-MECHANICS.md",
+      "sha256": "b4c54a0aaad3f6eddefde6d06770a0e401fbb8fc6a8f49ce18af816bd144d14d"
+    },
+    {
+      "bytes": 10966,
+      "git_blob_sha": "c059d48cd70cfd1494bde74afcc426010b1c10e3",
+      "path": "productivity/writing-for-agents/SKILL.md",
+      "sha256": "a842323e664e5af104eac5c97ad22fda929ebeb62d81c501161ac1f6f482db58"
+    },
+    {
+      "bytes": 102,
+      "git_blob_sha": "079c933b75743dec18b5d0c01006def20b6aad26",
+      "path": "productivity/writing-for-agents/agents/openai.yaml",
+      "sha256": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b"
     }
   ],
   "pinned_commit": "8b78b531ab965735c5dc74f6f7a219e1e37326df",
-  "skill_touch_commit": "c0d69015e0cc8b66715beb3f93f9e53256e20f30",
+  "selected_productivity": [
+    "productivity/README.md",
+    "productivity/grill-me/SKILL.md",
+    "productivity/grill-me/agents/openai.yaml",
+    "productivity/grilling/SKILL.md",
+    "productivity/grilling/agents/openai.yaml",
+    "productivity/handoff/SKILL.md",
+    "productivity/handoff/agents/openai.yaml",
+    "productivity/to-questionnaire/SKILL.md",
+    "productivity/to-questionnaire/agents/openai.yaml",
+    "productivity/wait-what/SKILL.md",
+    "productivity/wait-what/agents/openai.yaml",
+    "productivity/writing-for-agents/SKILL-MECHANICS.md",
+    "productivity/writing-for-agents/SKILL.md",
+    "productivity/writing-for-agents/agents/openai.yaml"
+  ],
   "upstream": "https://github.com/mattpocock/skills"
 }

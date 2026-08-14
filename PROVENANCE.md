@@ -8,6 +8,18 @@ On 2026-07-30, the team reviewed Matt Pocock's MIT-licensed `mattpocock/skills` 
 
 The Templeton skill is independently expanded around trusted-host repository reconnaissance, secret-filtered context packets, per-turn runtime preflight, no-tools spec execution, issue-contract fields, Tony's GitHub approval gate, bounded issue size, deterministic sink checks, and the existing independent plan-review role. The spec role has no GitHub mutation phase. No upstream plugin, setup script, issue-tracker configuration, hooks, personal skills, or automatic update behavior is included. Generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
 
+## Selected Productivity Helpers (optional)
+
+On 2026-08-14, selected Matt Pocock MIT-licensed productivity skills were incorporated from `mattpocock/skills` at pinned commit `8b78b531ab965735c5dc74f6f7a219e1e37326df`:
+
+- `grill-me` / `grilling` → `optional-skills/templeton-grill` (Templeton keeps one question at a time)
+- `handoff` → `optional-skills/templeton-handoff`
+- `to-questionnaire` → `optional-skills/templeton-questionnaire`
+- `wait-what` → `optional-skills/templeton-wait-what`
+- `writing-for-agents` → `optional-skills/templeton-writing-for-agents`
+
+Vendored under `third_party/mattpocock-skills/productivity/`. Not incorporated: `teach` and any upstream path that auto-applies agent-ready or bypasses human gates. These helpers are outside the seven core outer-loop authority roles.
+
 ## Improve Codebase Architecture (optional helper)
 
 On 2026-08-14, the team incorporated Matt Pocock's MIT-licensed `improve-codebase-architecture` and supporting `codebase-design` vocabulary from `mattpocock/skills` at pinned commit `8b78b531ab965735c5dc74f6f7a219e1e37326df`.

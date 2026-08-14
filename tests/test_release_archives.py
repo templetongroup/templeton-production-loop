@@ -98,7 +98,10 @@ def test_matt_pocock_notice_is_preserved_in_both_editions_and_archives(
         "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
         "8b78b531ab965735c5dc74f6f7a219e1e37326df",
         "improve-codebase-architecture",
-        "optional-skills/templeton-architecture-review/",
+        "optional-skills/templeton-*",
+        "writing-for-agents",
+        "third_party/mattpocock-skills/productivity/",
+        "teach",
         "Copyright (c) 2026 Matt Pocock",
         "Permission is hereby granted, free of charge",
     )
@@ -107,7 +110,10 @@ def test_matt_pocock_notice_is_preserved_in_both_editions_and_archives(
         notice = (stage / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
         assert all(value in notice for value in required)
         assert (stage / "optional-skills" / "templeton-architecture-review" / "SKILL.md").is_file()
+        assert (stage / "optional-skills" / "templeton-grill" / "SKILL.md").is_file()
+        assert (stage / "optional-skills" / "templeton-handoff" / "SKILL.md").is_file()
         assert (stage / "third_party" / "mattpocock-skills" / "PINNED.md").is_file()
+        assert (stage / "third_party" / "mattpocock-skills" / "productivity" / "handoff" / "SKILL.md").is_file()
 
     assert builder.main() == 0
     for archive in dist.glob("*.zip"):

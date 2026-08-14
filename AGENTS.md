@@ -11,3 +11,4 @@ This repository implements the Templeton Production Loop.
 - Add tests for changes to labels, candidate selection, SHA pinning, agent commands, locking, model routing, proof workspaces, verifier behavior, evidence writes, or safety gates.
 - Do not print or store credentials.
 - Optional helpers under `optional-skills/` are report-only and outside outer-loop authority; they must not apply `loop:agent-ready` or mutate GitHub/source state.
+- Selected optional productivity helpers (`templeton-grill`, `templeton-handoff`, `templeton-questionnaire`, `templeton-wait-what`, `templeton-writing-for-agents`) are operator-assist only.

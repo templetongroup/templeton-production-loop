@@ -214,10 +214,24 @@ For codebase deepening opportunities before filing work into the loop, use the o
 
 This helper adapts Matt Pocock's MIT-licensed `improve-codebase-architecture` flow: scan hot spots, produce a temp HTML candidate report, grill one candidate, and return a `loop:spec-draft` issue packet for human filing. It is not one of the seven outer-loop authority roles and never applies `loop:agent-ready`, edits source, or mutates GitHub state.
 
+## Optional productivity helpers
+
+Selected Matt Pocock productivity skills are vendored and wrapped as optional operator helpers:
+
+- `optional-skills/templeton-grill` — one-question-at-a-time design interview
+- `optional-skills/templeton-handoff` — temp-dir secret-redacted session handoff
+- `optional-skills/templeton-questionnaire` — blocked-decision questionnaire for one recipient
+- `optional-skills/templeton-wait-what` — plain re-pitch when a status update did not land
+- `optional-skills/templeton-writing-for-agents` — agent-doc/skill writing guidance
+
+Upstream sources: `third_party/mattpocock-skills/productivity/`  
+Selection note: `docs/research/2026-08-14-mattpocock-productivity-selection.md`  
+Not incorporated: `teach` and any automatic agent-ready path.
+
 ## Governance and provenance
 
 Only the designated human operator applies `loop:agent-ready`. An authorized human may review the resulting PR and evidence and merge. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
 
-Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Its optional architecture helper adapts `improve-codebase-architecture` and `codebase-design` under the same MIT attribution model. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
+Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Its optional architecture and selected productivity helpers adapt `improve-codebase-architecture`, `codebase-design`, `grill-me`/`grilling`, `handoff`, `to-questionnaire`, `wait-what`, and `writing-for-agents` under the same MIT attribution model. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
 
 CLI and Python import names remain `templeton-loop` / `templeton_loop` for compatibility.

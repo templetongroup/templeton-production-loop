@@ -136,3 +136,43 @@ def test_vendored_mattpocock_architecture_sources_are_pinned():
     assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in pin
     license_text = (vendor / "LICENSE").read_text()
     assert "Copyright (c) 2026 Matt Pocock" in license_text
+
+
+def test_optional_productivity_helpers_are_outside_core_inventory_and_gated():
+    expected = {
+        "templeton-architecture-review",
+        "templeton-grill",
+        "templeton-handoff",
+        "templeton-questionnaire",
+        "templeton-wait-what",
+        "templeton-writing-for-agents",
+    }
+    optional_root = ROOT / "optional-skills"
+    actual = {path.name for path in optional_root.iterdir() if path.is_dir()}
+    assert expected.issubset(actual)
+    for name in sorted(expected):
+        text = (optional_root / name / "SKILL.md").read_text()
+        assert text.startswith("---\n")
+        assert f"name: {name}\n" in text
+        assert "loop:agent-ready" in text
+        assert "Never" in text
+        assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in text
+    for folder, core in present_runtime_skills().items():
+        assert expected.isdisjoint(core)
+        actual_core = {path.name for path in (ROOT / folder).iterdir() if path.is_dir()}
+        assert expected.isdisjoint(actual_core)
+
+
+def test_vendored_mattpocock_productivity_selection_excludes_teach():
+    vendor = ROOT / "third_party" / "mattpocock-skills"
+    pin = (vendor / "PINNED.md").read_text()
+    assert "skills/productivity/handoff" in pin
+    assert "skills/productivity/teach" in pin  # listed as not incorporated
+    assert "Not incorporated" in pin
+    assert (vendor / "productivity" / "handoff" / "SKILL.md").is_file()
+    assert (vendor / "productivity" / "grilling" / "SKILL.md").is_file()
+    assert (vendor / "productivity" / "writing-for-agents" / "SKILL.md").is_file()
+    assert not (vendor / "productivity" / "teach").exists()
+    # Templeton grill remains one-at-a-time
+    grill = (ROOT / "optional-skills" / "templeton-grill" / "SKILL.md").read_text()
+    assert "one decision question at a time" in grill.lower() or "one question at a time" in grill.lower()
