@@ -2,9 +2,13 @@
 
 All notable changes to Templeton Production Loop are documented here.
 
-## Unreleased
+## 1.2.0 — 2026-08-31
 
 ### Added
+- A strict model- and harness-neutral connector interface with exact JSON configuration, fail-closed runtime preflight, role capability negotiation, and config-digest evidence.
+- Connector-backed execution for specification, build, review, QA, and artifact proof roles.
+- Provider-neutral proof routing through connector flags for model, provider, profile, phase, turn budget, and timeout.
+- `docs/connector-protocol.md` and `examples/connector.example.json` for Claude Code, Codex, Gemini CLI, API models, local models, and future harness adapters.
 - Optional architecture helper adapted from Matt Pocock's `improve-codebase-architecture` + `codebase-design` (pinned `8b78b531ab965735c5dc74f6f7a219e1e37326df`):
   - vendored sources in `third_party/mattpocock-skills/`
   - Templeton-native report-only wrapper `optional-skills/templeton-architecture-review/`
@@ -20,6 +24,8 @@ All notable changes to Templeton Production Loop are documented here.
 
 ### Changed
 - Public product name is **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop`.
+- The canonical source installation now defaults to the generic connector runtime. Hermes and OpenClaw remain fixed built-in archive editions generated from this repository.
+- Runtime editions are documented as installation archives rather than separately maintained Coding Loop repositories.
 - Added `docs/research/2026-08-14-graph-patterns-in-proof-runner.md` for inner Proof Runner graph patterns.
 
 ## 1.1.0 — 2026-07-30

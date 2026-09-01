@@ -1,6 +1,6 @@
 # Templeton Production Loop — OpenClaw Edition
 
-Version **1.1.0**. This standalone repository is fixed to OpenClaw; the CLI has no `--runtime` option. Its coding-loop roles and live `prove` command execute through explicit OpenClaw adapters. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
+Version **1.2.0**. This generated installation archive is fixed to OpenClaw; the CLI has no `--runtime` option. Its Production Loop roles and live `prove` command execute through explicit OpenClaw adapters. Its source of truth is the Templeton Production Loop repository. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
 
 ## Requirements
 

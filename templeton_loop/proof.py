@@ -25,6 +25,12 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from .boundaries import prepare_sink, wrap_untrusted
+from .connector import (
+    ConnectorConfig,
+    connector_command,
+    load_connector_config,
+    verify_connector_runtime,
+)
 from .evidence import canonical_json, redact, redact_text
 from .policy import PolicyError, hermes_policy_args, validate_agent_id
 from .runtime import verify_hermes_runtime, verify_openclaw_runtime
@@ -607,6 +613,30 @@ def build_openclaw_command(
     ]
 
 
+def build_connector_command(
+    route: ModelRoute,
+    prompt: str,
+    *,
+    config: ConnectorConfig,
+    phase: str,
+) -> list[str]:
+    """Build one provider-neutral invocation through the connector seam."""
+
+    if phase not in {"strategy", "worker"}:
+        raise ProofError("Connector proof phase must be strategy or worker")
+    return connector_command(
+        config,
+        role="prove",
+        phase=phase,
+        prompt=_string(prompt, "prompt"),
+        model=route.model,
+        provider=route.provider,
+        profile=route.profile,
+        max_turns=route.max_turns,
+        timeout=route.timeout_seconds,
+    )
+
+
 def _proof_command(
     runtime: str,
     route: ModelRoute,
@@ -615,6 +645,8 @@ def _proof_command(
     executable: str | Path,
     agent_id: str | None,
     session_key: str,
+    connector_config: ConnectorConfig | None = None,
+    phase: str = "worker",
 ) -> list[str]:
     if runtime == "hermes":
         return build_hermes_command(route, prompt, executable=executable)
@@ -628,11 +660,20 @@ def _proof_command(
             agent_id=agent_id,
             session_key=session_key,
         )
+    if runtime == "connector":
+        if connector_config is None:
+            raise ProofError("Connector proof execution requires --connector-config PATH")
+        return build_connector_command(
+            route,
+            prompt,
+            config=connector_config,
+            phase=phase,
+        )
     raise ProofError(f"Unknown proof runtime adapter: {runtime}")
 
 
 def _adapter_output(runtime: str, stdout: str) -> str:
-    if runtime == "hermes":
+    if runtime in {"connector", "hermes"}:
         return stdout
     try:
         payload = json.loads(stdout)
@@ -677,6 +718,8 @@ def _route_row(
     runtime: str = "hermes",
     agent_id: str | None = None,
     session_key: str = "agent:AGENT_ID:templeton-proof-dry-run",
+    connector_config: ConnectorConfig | None = None,
+    phase: str = "worker",
 ) -> dict[str, Any]:
     return {
         "model": route.model,
@@ -691,6 +734,8 @@ def _route_row(
             executable=executable,
             agent_id=agent_id,
             session_key=session_key,
+            connector_config=connector_config,
+            phase=phase,
         ),
     }
 
@@ -717,10 +762,14 @@ def dry_run(
     hermes_executable: str | Path = "hermes",
     runtime: str = "hermes",
     agent_id: str | None = None,
+    connector_config: str | Path | None = None,
 ) -> dict[str, Any]:
     """Expose exact phase/model routing without model calls or filesystem writes."""
 
     manifest = _coerce_manifest(value)
+    loaded_connector = (
+        load_connector_config(connector_config) if connector_config is not None else None
+    )
     strategy_prompt = (
         f"{manifest.strategy_prompt}\n\n"
         "Source snapshot (read-only): <SOURCE_SNAPSHOT>. Return a bounded strategy only."
@@ -731,6 +780,8 @@ def dry_run(
         hermes_executable,
         runtime=runtime,
         agent_id=agent_id,
+        connector_config=loaded_connector,
+        phase="strategy",
     )
     tasks: list[dict[str, Any]] = []
     for task in manifest.tasks:
@@ -747,6 +798,8 @@ def dry_run(
             runtime=runtime,
             agent_id=agent_id,
             session_key=f"agent:{agent_id}:templeton-proof-{task.id}-dry-run",
+            connector_config=loaded_connector,
+            phase="worker",
         )
         row.update(
             {
@@ -1259,6 +1312,8 @@ def _run_task(
     runtime: str,
     agent_id: str | None,
     adapter_root: Path,
+    connector_config: ConnectorConfig | None,
+    connector_verifier: Callable[..., dict[str, Any]] | None,
 ) -> dict[str, Any]:
     route = task.worker_route(manifest.worker)
     retry_limit = manifest.retries if task.retries is None else task.retries
@@ -1297,6 +1352,8 @@ def _run_task(
             executable=hermes_executable,
             agent_id=agent_id,
             session_key=f"agent:{agent_id}:templeton-proof-{task.id}-{number}-{uuid.uuid4().hex[:12]}",
+            connector_config=connector_config,
+            phase="worker",
         )
         child_env = _child_environment(
             manifest,
@@ -1312,6 +1369,30 @@ def _run_task(
                 "HERMES_SAFE_MODE": "1",
             },
         )
+        connector_policy: dict[str, Any] | None = None
+        if runtime == "connector":
+            if connector_config is None or connector_verifier is None:
+                raise ProofError("Connector proof runtime is not configured")
+            workspace_before_preflight = _tree_inventory(workspace)
+            connector_policy = connector_verifier(
+                connector_config,
+                role="prove",
+                workspace=workspace,
+                environ=child_env,
+            )
+            if _source_changes(
+                workspace_before_preflight, _tree_inventory(workspace)
+            ):
+                raise ProofError(
+                    f"Connector proof workspace was mutated during policy preflight: {workspace}"
+                )
+            attempt_image = _string(
+                connector_policy.get("verifier_image"), "runtime verifier image"
+            )
+            if attempt_image != verifier_image:
+                raise ProofError(
+                    "Connector verifier image changed between proof preflight and worker invocation"
+                )
         events.append("worker_started", task=task.id, attempt=number, model=route.model)
         worker = _run_argv(
             command,
@@ -1453,6 +1534,8 @@ def _run_task(
             "verifiers": verifier_rows,
             "failure": failure,
         }
+        if connector_policy is not None:
+            attempt["runtime_policy"] = connector_policy
         attempts.append(attempt)
         events.append(
             "worker_completed",
@@ -1602,6 +1685,7 @@ def run_proof(
     runtime_verifier: Callable[..., dict[str, Any]] | None = None,
     runtime: str = "hermes",
     agent_id: str | None = None,
+    connector_config: str | Path | None = None,
 ) -> dict[str, Any]:
     """Execute a trusted artifact plan in disposable, isolated workspaces."""
 
@@ -1611,8 +1695,13 @@ def run_proof(
     ):
         raise ProofError(f"retries must not exceed {MAX_RETRIES}")
     environment = dict(os.environ if environ is None else environ)
-    if runtime not in {"hermes", "openclaw"}:
+    if runtime not in {"connector", "hermes", "openclaw"}:
         raise ProofError(f"Unknown proof runtime adapter: {runtime}")
+    loaded_connector = (
+        load_connector_config(connector_config) if connector_config is not None else None
+    )
+    if runtime == "connector" and loaded_connector is None:
+        raise ProofError("Connector proof execution requires --connector-config PATH")
     root = Path(run_root).expanduser().resolve()
     try:
         root.relative_to(manifest.source_root)
@@ -1637,9 +1726,18 @@ def run_proof(
                 "archive the prior run and clear the workspace first"
             )
         environment.pop("HERMES_HOME", None)
-    verifier = runtime_verifier or (
-        verify_openclaw_runtime if runtime == "openclaw" else verify_hermes_runtime
-    )
+    elif runtime == "connector":
+        root.mkdir(parents=True, exist_ok=True)
+        if root.is_symlink() or not root.is_dir() or any(root.iterdir()):
+            raise ProofError(
+                "Connector proof workspace must be an existing empty non-symlink directory"
+            )
+        environment.pop("HERMES_HOME", None)
+    verifier = runtime_verifier or {
+        "connector": verify_connector_runtime,
+        "hermes": verify_hermes_runtime,
+        "openclaw": verify_openclaw_runtime,
+    }[runtime]
     profiles = {
         manifest.strategy.profile,
         manifest.worker.profile,
@@ -1671,7 +1769,7 @@ def run_proof(
         if len(verified_homes) != 1:
             raise ProofError("Every selected Hermes profile must use the same dedicated HERMES_HOME")
         environment["HERMES_HOME"] = next(iter(verified_homes))
-    else:
+    elif runtime == "openclaw":
         policy = verifier(
             executable=str(hermes_executable),
             agent_id=agent_id,
@@ -1684,6 +1782,20 @@ def run_proof(
         if any(root.iterdir()):
             raise ProofError(
                 f"OpenClaw proof workspace was mutated during policy preflight: {root}"
+            )
+    else:
+        assert loaded_connector is not None
+        policy = verifier(
+            loaded_connector,
+            role="prove",
+            workspace=root,
+            environ=environment,
+        )
+        runtime_policies = [policy]
+        verifier_image = _string(policy.get("verifier_image"), "runtime verifier image")
+        if any(root.iterdir()):
+            raise ProofError(
+                f"Connector proof workspace was mutated during policy preflight: {root}"
             )
     validated_source_records = dict(manifest.source_records)
     source_inventory_before = _source_inventory(manifest)
@@ -1740,6 +1852,8 @@ def run_proof(
         executable=hermes_executable,
         agent_id=agent_id,
         session_key=f"agent:{agent_id}:templeton-proof-strategy-{uuid.uuid4().hex[:12]}",
+        connector_config=loaded_connector,
+        phase="strategy",
     )
     strategy_env = _child_environment(
         manifest,
@@ -1752,6 +1866,28 @@ def run_proof(
             "HERMES_SAFE_MODE": "1",
         },
     )
+    if runtime == "connector":
+        assert loaded_connector is not None
+        strategy_workspace_before = _tree_inventory(shared_snapshot)
+        strategy_policy = verifier(
+            loaded_connector,
+            role="prove",
+            workspace=shared_snapshot,
+            environ=strategy_env,
+        )
+        if _source_changes(strategy_workspace_before, _tree_inventory(shared_snapshot)):
+            raise ProofError(
+                "Connector strategy workspace was mutated during policy preflight: "
+                f"{shared_snapshot}"
+            )
+        strategy_image = _string(
+            strategy_policy.get("verifier_image"), "runtime verifier image"
+        )
+        if strategy_image != verifier_image:
+            raise ProofError(
+                "Connector verifier image changed between proof preflight and strategy invocation"
+            )
+        runtime_policies.append(strategy_policy)
     events.append("strategy_started", model=manifest.strategy.model)
     strategy_result = _run_argv(
         strategy_command,
@@ -1826,6 +1962,8 @@ def run_proof(
                     runtime=runtime,
                     agent_id=agent_id,
                     adapter_root=root,
+                    connector_config=loaded_connector,
+                    connector_verifier=verifier if runtime == "connector" else None,
                 )
                 for task in manifest.tasks
             ]

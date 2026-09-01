@@ -1,0 +1,14 @@
+{
+  "schema": "templeton.connector.v1",
+  "id": "replace-with-harness-id",
+  "command": [
+    "/absolute/path/to/templeton-harness-connector"
+  ],
+  "roles": [
+    "spec",
+    "build",
+    "review",
+    "qa",
+    "prove"
+  ]
+}

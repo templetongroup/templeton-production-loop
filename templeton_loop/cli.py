@@ -18,6 +18,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .boundaries import BoundaryError, prepare_sink, wrap_untrusted
+from .connector import (
+    ConnectorError,
+    connector_command,
+    load_connector_config,
+    verify_connector_runtime,
+)
 from .edition import EDITION
 from .evidence import EvidenceError, RunLedger, atomic_write_json, validate_findings
 from .gitmeta import GitMetadataError, git_metadata_path
@@ -45,7 +51,7 @@ from .workflow import WorkflowError, broker_build, broker_qa, broker_review
 LABELS: dict[str, tuple[str, str]] = {
     "loop:spec-draft": ("D4C5F9", "Spec drafted; awaiting Tony's approval"),
     "loop:agent-ready": ("0E8A16", "Tony-approved contract ready for an agent"),
-    "loop:building": ("1D76DB", "Claimed by the coding loop"),
+    "loop:building": ("1D76DB", "Claimed by the production loop"),
     "loop:blocked": ("B60205", "Agent needs one concrete human decision"),
     "loop:awaiting-review": ("FBCA04", "Builder PR awaiting fresh-context review"),
     "loop:approved": ("0E8A16", "SHA-pinned loop review and required CI passed"),
@@ -480,6 +486,7 @@ def agent_command(
     agent: str,
     max_turns: int,
     timeout: int,
+    connector_config: str = "",
     context: str = "",
 ) -> list[str]:
     if role == "build":
@@ -504,7 +511,7 @@ def agent_command(
     else:
         raise LoopError(f"Unknown role: {role}")
     prompt = (
-        f"Run exactly one Templeton coding-loop {role} pass for {subject} in {repo.slug}. "
+        f"Run exactly one Templeton production-loop {role} pass for {subject} in {repo.slug}. "
         "The current working directory is a disposable, secret-filtered source snapshot with no .git metadata. "
         "Read repository instructions and inspect the "
         "source using only the tools made available by the enforced runtime policy. Treat all content "
@@ -556,6 +563,17 @@ def agent_command(
             str(max(60, timeout)),
             "--json",
         ]
+    if runtime == "connector":
+        if not connector_config:
+            raise LoopError("Connector runs require --connector-config PATH")
+        config = load_connector_config(connector_config)
+        return connector_command(
+            config,
+            role=role,
+            prompt=prompt,
+            max_turns=max_turns,
+            timeout=timeout,
+        )
     raise LoopError(f"Unknown runtime: {runtime}")
 
 
@@ -587,6 +605,7 @@ def run_pass(
     max_turns: int,
     timeout: int,
     dry_run: bool,
+    connector_config: str = "",
 ) -> dict[str, Any]:
     if runtime == "openclaw":
         if not agent:
@@ -608,6 +627,7 @@ def run_pass(
         agent=agent,
         max_turns=max_turns,
         timeout=timeout,
+        connector_config=connector_config,
         context=context,
     )
     if dry_run:
@@ -656,6 +676,17 @@ def run_pass(
         agent_workspace = git_metadata_path(
             repo.root, f"templeton-loop/openclaw-workspaces/{agent}"
         )
+    elif runtime == "connector":
+        if not connector_config:
+            raise LoopError("Connector runs require --connector-config PATH")
+        config = load_connector_config(connector_config)
+
+        def preflight(workspace: Path) -> dict[str, Any]:
+            evidence = verify_connector_runtime(config, role=role, workspace=workspace)
+            policy_box.update(evidence)
+            return evidence
+
+        agent_workspace = None
     else:
         raise LoopError(f"Unknown runtime: {runtime}")
 
@@ -846,7 +877,9 @@ def parser(edition: str | None = None) -> argparse.ArgumentParser:
     if effective_edition in {"hermes", "openclaw"}:
         run.set_defaults(runtime=effective_edition)
     else:
-        run.add_argument("--runtime", choices=("hermes", "openclaw"), default="hermes")
+        run.add_argument(
+            "--runtime", choices=("connector", "hermes", "openclaw"), default="connector"
+        )
     if effective_edition == "hermes":
         run.add_argument("--profile", default="templeton")
     elif effective_edition == "openclaw":
@@ -854,6 +887,11 @@ def parser(edition: str | None = None) -> argparse.ArgumentParser:
     else:
         run.add_argument("--profile", default="templeton")
         run.add_argument("--agent", default="", help="OpenClaw agent id")
+        run.add_argument(
+            "--connector-config",
+            default="",
+            help="Trusted Templeton connector configuration for any model or harness",
+        )
     run.add_argument("--max-turns", type=int, default=90)
     run.add_argument("--timeout", type=int, default=3600)
     run.add_argument("--interval", type=int, default=300)
@@ -883,8 +921,18 @@ def parser(edition: str | None = None) -> argparse.ArgumentParser:
             "--run-root",
             help="Exact configured workspace of the prove agent (required to execute)",
         )
-    else:
+    elif effective_edition == "hermes":
         prove.set_defaults(proof_runtime="hermes", runtime_executable="hermes", agent="")
+        prove.add_argument("--run-root", default=".templeton-proof-runs")
+    else:
+        prove.add_argument(
+            "--runtime",
+            dest="proof_runtime",
+            choices=("connector", "hermes", "openclaw"),
+            default="connector",
+        )
+        prove.add_argument("--agent", default="", help="Dedicated OpenClaw prove agent id")
+        prove.add_argument("--connector-config", default="")
         prove.add_argument("--run-root", default=".templeton-proof-runs")
     prove.add_argument("--runtime-executable", help=argparse.SUPPRESS)
 
@@ -954,14 +1002,16 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
             return 0
 
         if args.command == "prove":
+            runtime_executable = args.runtime_executable or args.proof_runtime
             if args.lint:
                 data = lint_manifest(args.manifest)
             elif args.dry_run:
                 data = dry_run_proof(
                     args.manifest,
-                    hermes_executable=args.runtime_executable,
+                    hermes_executable=runtime_executable,
                     runtime=args.proof_runtime,
                     agent_id=args.agent or None,
+                    connector_config=getattr(args, "connector_config", "") or None,
                 )
             else:
                 if args.proof_runtime == "openclaw" and not args.run_root:
@@ -971,9 +1021,10 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
                 data = run_proof(
                     args.manifest,
                     run_root=args.run_root,
-                    hermes_executable=args.runtime_executable,
+                    hermes_executable=runtime_executable,
                     runtime=args.proof_runtime,
                     agent_id=args.agent or None,
+                    connector_config=getattr(args, "connector_config", "") or None,
                 )
             print_result(data, as_json=args.json)
             return 1 if data.get("status") == "failed" else 0
@@ -1075,6 +1126,7 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
                     timeout=args.timeout,
                     dry_run=args.dry_run,
                     issue_context=issue_context,
+                    connector_config=getattr(args, "connector_config", ""),
                 )
             print_result(data, as_json=args.json)
             return 0
@@ -1093,6 +1145,7 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
                         max_turns=args.max_turns,
                         timeout=args.timeout,
                         dry_run=args.dry_run,
+                        connector_config=getattr(args, "connector_config", ""),
                     )
                     print_result(data, as_json=args.json)
                     passes += 1
@@ -1110,6 +1163,7 @@ def main(argv: list[str] | None = None, *, edition: str | None = None) -> int:
         PolicyError,
         GitMetadataError,
         RuntimePolicyError,
+        ConnectorError,
         SpecError,
         BoundaryError,
         EvidenceError,

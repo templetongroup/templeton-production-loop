@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 STAGE = DIST / "stage"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 RUNTIMES = ("hermes", "openclaw")
 
 
@@ -216,7 +216,7 @@ def stage_bundle(runtime: str) -> tuple[str, Path]:
 
     (stage / "templeton_loop" / "edition.py").write_text(
         "from __future__ import annotations\n\n"
-        "# Fixed by the release generator; this standalone repository cannot switch runtimes.\n"
+        "# Fixed by the release generator; this installation archive cannot switch runtimes.\n"
         f"EDITION: str | None = {runtime!r}\n",
         encoding="utf-8",
     )

@@ -359,7 +359,7 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
                 "spec role returns an issue packet" in agents
                 and "does not create issues or apply labels" in agents
             ),
-            "supported 1.1 security line": "1.1.x is the supported release line" in security,
+            "supported 1.2 security line": "1.2.x is the supported release line" in security,
         }
     )
 
