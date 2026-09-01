@@ -1,7 +1,7 @@
 ---
 name: templeton-loop-spec
 description: Interview the human one decision at a time, then draft a bounded GitHub issue contract for approval.
-version: 1.1.0
+version: 1.2.0
 license: MIT
 ---
 

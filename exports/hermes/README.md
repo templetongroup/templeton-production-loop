@@ -1,6 +1,6 @@
 # Templeton Production Loop — Hermes Edition
 
-Version **1.1.0**. This standalone repository is fixed to Hermes; the CLI has no `--runtime` option.
+Version **1.2.0**. This generated installation archive is fixed to Hermes; the CLI has no `--runtime` option. Its source of truth is the Templeton Production Loop repository.
 
 ## Requirements
 

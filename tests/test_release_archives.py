@@ -61,8 +61,8 @@ def test_archives_are_reproducible_and_safe(tmp_path: Path, monkeypatch: pytest.
     assert builder.main() == 0
     assert not (dist / "exports.json").exists()
     assert {path.name for path in dist.glob("*.zip")} == {
-        "templeton-production-loop-hermes-v1.1.0.zip",
-        "templeton-production-loop-openclaw-v1.1.0.zip",
+        "templeton-production-loop-hermes-v1.2.0.zip",
+        "templeton-production-loop-openclaw-v1.2.0.zip",
     }
     before = {path.name: sha256(path) for path in dist.glob("*.zip")}
     assert builder.main() == 0

@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, Iterable, Protocol
 
 from .boundaries import BoundaryError, prepare_sink, wrap_untrusted
+from .connector import (
+    connector_command,
+    connector_workspace,
+    load_connector_config,
+    verify_connector_runtime,
+)
 from .evidence import atomic_write_json, redact_text
 from .gitmeta import git_metadata_path
 from .policy import hermes_policy_args, validate_agent_id
@@ -252,6 +258,7 @@ def spec_agent_command(
     timeout: int,
     max_turns: int,
     session: str,
+    connector_config: str = "",
 ) -> list[str]:
     del repo
     validate_agent_id(session)
@@ -297,6 +304,16 @@ def spec_agent_command(
             str(max(60, timeout)),
             "--json",
         ]
+    if runtime == "connector":
+        if not connector_config:
+            raise SpecError("Connector spec runs require --connector-config PATH")
+        return connector_command(
+            load_connector_config(connector_config),
+            role="spec",
+            prompt=prompt,
+            max_turns=max_turns,
+            timeout=timeout,
+        )
     raise SpecError(f"Unknown runtime: {runtime}")
 
 
@@ -394,8 +411,21 @@ def _require_empty_workspace(path: Path) -> None:
         raise SpecError(f"OpenClaw spec workspace must remain empty: {path}")
 
 
+def _require_empty_connector_workspace(path: Path) -> None:
+    if path.is_symlink() or not path.is_dir():
+        raise SpecError(f"Connector spec workspace must be an existing empty directory: {path}")
+    if any(path.iterdir()):
+        raise SpecError(f"Connector spec workspace must remain empty: {path}")
+
+
 def _preflight_spec_runtime(
-    *, runtime: str, repo: RepoLike, profile: str, agent: str, command: list[str]
+    *,
+    runtime: str,
+    repo: RepoLike,
+    profile: str,
+    agent: str,
+    command: list[str],
+    connector_config: str = "",
 ) -> dict[str, Any]:
     if runtime == "hermes":
         return verify_hermes_runtime(executable="hermes", profile=profile or None, role="spec")
@@ -415,11 +445,20 @@ def _preflight_spec_runtime(
             workspace=workspace,
             session_id=session_key,
         )
+    if runtime == "connector":
+        if not connector_config:
+            raise SpecError("Connector spec runs require --connector-config PATH")
+        config = load_connector_config(connector_config)
+        workspace = connector_workspace(
+            git_metadata_path(repo.root, "templeton-loop"), config.id, "spec"
+        )
+        _require_empty_connector_workspace(workspace)
+        return verify_connector_runtime(config, role="spec", workspace=workspace)
     raise SpecError(f"Unknown runtime: {runtime}")
 
 
 def _adapter_output(runtime: str, stdout: str) -> str:
-    if runtime == "hermes":
+    if runtime in {"connector", "hermes"}:
         return stdout
     try:
         payload = json.loads(stdout)
@@ -462,6 +501,7 @@ def run_spec_turn(
     timeout: int,
     dry_run: bool,
     issue_context: list[dict[str, Any]],
+    connector_config: str = "",
 ) -> dict[str, Any]:
     include_values = list(includes)
     if confirm and answer_file is not None:
@@ -538,6 +578,7 @@ def run_spec_turn(
         timeout=timeout,
         max_turns=max_turns,
         session=session,
+        connector_config=connector_config,
     )
     if dry_run:
         prompt_prepared = prepare_sink(prompt, sink="spec-dry-run-prompt", max_bytes=300_000)
@@ -567,8 +608,17 @@ def run_spec_turn(
         profile=profile,
         agent=agent,
         command=command,
+        connector_config=connector_config,
     )
-    result = _run(command, cwd=repo.root, check=False, timeout=timeout)
+    command_cwd = repo.root
+    connector_run_workspace: Path | None = None
+    if runtime == "connector":
+        config = load_connector_config(connector_config)
+        connector_run_workspace = connector_workspace(
+            git_metadata_path(repo.root, "templeton-loop"), config.id, "spec"
+        )
+        command_cwd = connector_run_workspace
+    result = _run(command, cwd=command_cwd, check=False, timeout=timeout)
     if result.returncode != 0:
         raise SpecError(f"Spec agent failed: {redact_text(result.stderr[-2000:])}")
     response = validate_spec_response(
@@ -585,6 +635,8 @@ def run_spec_turn(
     atomic_write_json(state_path, state)
     if runtime == "openclaw":
         _require_empty_workspace(_workspace(repo, agent))
+    if connector_run_workspace is not None:
+        _require_empty_connector_workspace(connector_run_workspace)
     output: dict[str, Any] = {
         "status": response["status"],
         "role": "spec",

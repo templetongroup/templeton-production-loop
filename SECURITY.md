@@ -2,7 +2,7 @@
 
 ## Supported release
 
-Templeton Production Loop 1.1.x is the supported release line.
+Templeton Production Loop 1.2.x is the supported release line.
 
 ## Trust model
 
@@ -22,6 +22,21 @@ Model workers receive only a filtered staged tree or, for the no-tools spec role
 ## Enforced runtime boundary
 
 A run fails closed before its first model call unless the selected runtime proves its policy.
+
+### Universal connector
+
+A generic harness connector is trusted host software and must satisfy the exact
+`templeton.connector.v1` interface documented in `docs/connector-protocol.md`.
+Before every invocation, the broker requires a strict preflight record proving
+the connector id, exact workspace, role-specific access, structured output,
+fresh-session behavior, enforced isolation, no network, and no credential
+access. Proof connectors must also return a digest-pinned verifier image. The
+broker rejects missing, extra, or mismatched fields and records the connector
+configuration digest with its evidence.
+
+The protocol standardizes the boundary; it does not turn an untrusted wrapper
+into a sandbox. Operators must review connector code and its harness-specific
+policy enforcement before trusting it.
 
 ### Hermes
 
