@@ -49,7 +49,11 @@ def test_human_gates_are_present_in_role_skills():
         assert "gh pr checks NUMBER --required" in review
         assert "No required CI means `loop:needs-human-review`" in review
         assert "Never push code" in review
-        assert "Templeton Loop review of COMMIT_SHA" in review
+        assert "Templeton Loop review of HEAD_SHA against BASE_SHA" in review
+        assert "frozen changed-file coverage manifest" in review
+        assert "semantic groups" in review
+        assert "artifact-specific" in review
+        assert "changed-code anchor" in review
         plan_review = (ROOT / folder / "templeton-loop-plan-review/SKILL.md").read_text()
         qa = (ROOT / folder / "templeton-loop-qa/SKILL.md").read_text()
         assert "report-only" in plan_review.lower()

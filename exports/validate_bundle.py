@@ -265,7 +265,7 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
         "build retry cap": "at most two builder repair rounds" in combined["templeton-loop-build"],
         "review required CI": "gh pr checks NUMBER --required" in combined["templeton-loop-review"],
         "review no code push": "Never push code" in combined["templeton-loop-review"],
-        "review SHA pin": "Templeton Loop review of COMMIT_SHA" in combined["templeton-loop-review"],
+        "review comparison pin": "Templeton Loop review of HEAD_SHA against BASE_SHA" in combined["templeton-loop-review"],
         "qa report only": "report-only" in combined["templeton-loop-qa"].lower(),
         "status read only": "never mutate" in combined["templeton-loop-status"].lower(),
     }

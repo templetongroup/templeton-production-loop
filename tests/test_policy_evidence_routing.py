@@ -9,11 +9,13 @@ import pytest
 from templeton_loop.evidence import (
     EvidenceError,
     Finding,
+    ReviewCoverage,
     RunLedger,
     atomic_write_json,
     evidence_freshness,
     redact,
     validate_findings,
+    validate_review_coverage,
 )
 from templeton_loop.policy import (
     PolicyError,
@@ -121,6 +123,54 @@ def test_finding_schema_and_deduplication():
     assert Finding.from_dict(value).acceptance_criterion == "AC-1"
     with pytest.raises(EvidenceError, match="Duplicate finding fingerprint"):
         validate_findings([value, {**value, "finding_id": "F-AC1-002"}])
+
+
+def test_review_coverage_reconciles_the_frozen_file_inventory():
+    inventory = [
+        {"path": "src/a.py", "status": "modified"},
+        {"path": "tests/test_a.py", "status": "added"},
+    ]
+    complete = validate_review_coverage(
+        [
+            {"path": "tests/test_a.py", "status": "added", "outcome": "reviewed"},
+            {"path": "src/a.py", "status": "modified", "outcome": "reviewed"},
+        ],
+        inventory,
+    )
+    assert isinstance(complete, ReviewCoverage)
+    assert complete.terminal_state == "complete"
+    assert complete.reviewed_count == 2
+    assert complete.skipped == ()
+
+    partial = validate_review_coverage(
+        [
+            {"path": "src/a.py", "status": "modified", "outcome": "reviewed"},
+            {
+                "path": "tests/test_a.py",
+                "status": "added",
+                "outcome": "skipped",
+                "reason": "file could not be decoded",
+            },
+        ],
+        inventory,
+    )
+    assert partial.terminal_state == "partial"
+    assert partial.skipped[0].reason == "file could not be decoded"
+    assert validate_review_coverage([], []).terminal_state == "skipped"
+
+    with pytest.raises(EvidenceError, match="does not match frozen inventory"):
+        validate_review_coverage(
+            [{"path": "src/a.py", "status": "modified", "outcome": "reviewed"}],
+            inventory,
+        )
+    with pytest.raises(EvidenceError, match="reason"):
+        validate_review_coverage(
+            [
+                {"path": "src/a.py", "status": "modified", "outcome": "reviewed"},
+                {"path": "tests/test_a.py", "status": "added", "outcome": "skipped"},
+            ],
+            inventory,
+        )
 
 
 def test_freshness_distinguishes_current_stale_and_unverifiable():

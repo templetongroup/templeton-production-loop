@@ -19,6 +19,11 @@ All notable changes to Templeton Production Loop are documented here.
 - Optional helpers are not part of the seven outer-loop authority roles and cannot apply `loop:agent-ready`. `teach` was evaluated and not incorporated.
 
 ### Changed
+- Review runs now freeze a complete status-bearing PR file inventory, require one reconciled per-file outcome, record coverage in the ledger and GitHub comment, and refuse terminal labels for partial coverage.
+- Review context and publication are pinned to one head/base comparison; changed-file totals are independently reconciled, truncated contexts fail closed, and partial runs clear stale automated verdict labels while remaining queued.
+- Review comments now carry a fixed broker-authored `Review-State` record before model text. Queue scans authenticate the comment author and require the state's exact terminal label, so crashes, stale or conflicting labels, malformed state, and forged review-like comments fail closed and requeue.
+- Reviewer guidance now requires a local-diff pass before targeted repository context, coverage-preserving semantic groups for substantial diffs, artifact-specific risk routing, and pinned-diff confirmation of candidate findings. Changed tests remain in scope.
+- Added `docs/research/2026-09-14-alibaba-open-code-review-selection.md` documenting the selective concept review and non-adoption boundary for Alibaba Open Code Review.
 - Public product name is **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop`.
 - Added `docs/research/2026-08-14-graph-patterns-in-proof-runner.md` for inner Proof Runner graph patterns.
 

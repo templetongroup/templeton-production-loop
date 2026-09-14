@@ -15,7 +15,17 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .boundaries import prepare_sink
-from .evidence import EvidenceError, Finding, RunLedger, evidence_freshness, redact, redact_text, validate_findings
+from .evidence import (
+    EvidenceError,
+    Finding,
+    ReviewCoverage,
+    RunLedger,
+    evidence_freshness,
+    redact,
+    redact_text,
+    validate_findings,
+    validate_review_coverage,
+)
 from .gitmeta import git_metadata_path
 from .routing import Outcome, append_outcome
 from .staging import apply_staged_tree, compare_tree, stage_source
@@ -192,6 +202,53 @@ def _json_command(args: list[str], *, cwd: Path, check: bool = True) -> Any:
         return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise WorkflowError(f"Expected JSON from {shlex.join(args)}") from exc
+
+
+def review_file_inventory(
+    repo: Any,
+    pr_number: int,
+    *,
+    expected_count: int | None = None,
+) -> list[dict[str, str]]:
+    """Fetch the complete, status-bearing PR file inventory through paginated REST."""
+
+    pages = _json_command(
+        [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repo.slug}/pulls/{pr_number}/files?per_page=100",
+        ],
+        cwd=repo.root,
+    )
+    if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+        raise WorkflowError("GitHub returned an invalid paginated PR file inventory")
+    inventory: list[dict[str, str]] = []
+    identities: set[tuple[str, str]] = set()
+    for page in pages:
+        for item in page:
+            if not isinstance(item, dict):
+                raise WorkflowError("GitHub returned an invalid PR file entry")
+            path = item.get("filename")
+            status = item.get("status")
+            if not isinstance(path, str) or not path or not isinstance(status, str) or not status:
+                raise WorkflowError("GitHub PR file entry is missing filename or status")
+            identity = (path, status)
+            if identity in identities:
+                raise WorkflowError(f"GitHub returned duplicate PR file entry: {path} ({status})")
+            identities.add(identity)
+            inventory.append({"path": path, "status": status})
+    inventory = sorted(inventory, key=lambda item: (item["path"], item["status"]))
+    if expected_count is not None:
+        if not isinstance(expected_count, int) or isinstance(expected_count, bool) or expected_count < 0:
+            raise WorkflowError("GitHub returned an invalid changed-file count")
+        if len(inventory) != expected_count:
+            raise WorkflowError(
+                "GitHub PR file inventory is incomplete: "
+                f"expected {expected_count}, received {len(inventory)}"
+            )
+    return inventory
 
 
 def _changed_paths(worktree: Path) -> list[str]:
@@ -666,10 +723,28 @@ def _run_staged_readonly_agent(
         shutil.rmtree(workspace, ignore_errors=True)
 
 
-def format_review_comment(sha: str, summary: str, findings: list[Finding], ci: str, mergeability: str) -> str:
+def format_review_comment(
+    sha: str,
+    summary: str,
+    findings: list[Finding],
+    ci: str,
+    mergeability: str,
+    coverage: ReviewCoverage | None = None,
+    base_sha: str | None = None,
+) -> str:
     must_fix = [finding for finding in findings if finding.disposition == "must-fix"]
+    coverage_state = coverage.terminal_state if coverage is not None else "skipped"
+    if coverage_state != "complete":
+        review_verdict = "awaiting-review"
+    elif must_fix or ci == "failed" or mergeability != "clean":
+        review_verdict = "changes-requested"
+    elif ci != "required checks passed":
+        review_verdict = "needs-human-review"
+    else:
+        review_verdict = "approved"
     lines = [
-        f"Templeton Loop review of {sha}",
+        f"Templeton Loop review of {sha}" + (f" against {base_sha}" if base_sha else ""),
+        f"Review-State: verdict={review_verdict}; coverage={coverage_state}",
         "",
         f"CI: {ci}",
         f"Mergeability: {mergeability}",
@@ -678,17 +753,46 @@ def format_review_comment(sha: str, summary: str, findings: list[Finding], ci: s
         "",
         summary,
         "",
-        "## Must fix before merge",
+        "## Coverage",
         "",
     ]
+    if coverage is None:
+        lines.append("Not recorded.")
+    else:
+        lines.append(
+            f"{coverage.terminal_state}: {coverage.reviewed_count}/{coverage.selected_count} files reviewed; "
+            f"{coverage.skipped_count} skipped."
+        )
+        for item in coverage.skipped:
+            lines.append(f"- `{item.path}` ({item.status}) — skipped: {item.reason}")
+    lines.extend([
+        "",
+        "## Must fix before merge",
+        "",
+    ])
     if not must_fix:
         lines.append("None.")
     else:
         for finding in must_fix:
             location = f" ({finding.location})" if finding.location else ""
             lines.append(f"- **{finding.severity.upper()}** {finding.summary}{location} — {finding.failure_scenario}")
-    lines.extend(["", "## Safe to merge", "", "Yes — evidence is complete. Human merge required." if not must_fix and ci == "required checks passed" and mergeability == "clean" else "No."])
+    coverage_complete = coverage is not None and coverage.terminal_state == "complete"
+    lines.extend(["", "## Safe to merge", "", "Yes — evidence is complete. Human merge required." if coverage_complete and not must_fix and ci == "required checks passed" and mergeability == "clean" else "No."])
     return "\n".join(lines) + "\n"
+
+
+def _review_label_transition(verdict: str) -> tuple[str, tuple[str, ...]]:
+    expected = {
+        "approved": "loop:approved",
+        "changes-requested": "loop:changes-requested",
+        "needs-human-review": "loop:needs-human-review",
+    }
+    try:
+        add = expected[verdict]
+    except KeyError as exc:
+        raise WorkflowError(f"Unknown review verdict: {verdict}") from exc
+    automated = {"loop:approved", "loop:changes-requested"}
+    return add, tuple(sorted(automated - {add}))
 
 
 _CONTRACT_MARKER_RE = re.compile(r"(?mi)^\s*(?:[-*]\s*)?((?:AC|NG)-\d+)\s*:")
@@ -729,9 +833,44 @@ def broker_review(
     timeout: int,
     preflight: Callable[[Path], dict[str, Any]],
     agent_workspace: Path | None = None,
+    reviewed_sha: str | None = None,
+    reviewed_base_sha: str | None = None,
+    frozen_inventory: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    pr = _json_command(["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "number,title,body,url,headRefOid,mergeable,mergeStateStatus"], cwd=repo.root)
-    reviewed_sha = pr["headRefOid"]
+    pr = _json_command(["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "number,title,body,url,headRefOid,baseRefOid,changedFiles,mergeable,mergeStateStatus"], cwd=repo.root)
+    live_head_sha = pr["headRefOid"]
+    live_base_sha = pr["baseRefOid"]
+    if not isinstance(live_head_sha, str) or not live_head_sha:
+        raise WorkflowError("GitHub PR is missing a head SHA")
+    if not isinstance(live_base_sha, str) or not live_base_sha:
+        raise WorkflowError("GitHub PR is missing a base SHA")
+    if reviewed_sha is not None and live_head_sha != reviewed_sha:
+        return {
+            "status": "stale",
+            "role": "review",
+            "candidate": vars(candidate),
+            "reviewed_sha": reviewed_sha,
+            "current_sha": live_head_sha,
+        }
+    if reviewed_base_sha is not None and live_base_sha != reviewed_base_sha:
+        return {
+            "status": "stale",
+            "role": "review",
+            "candidate": vars(candidate),
+            "reviewed_base_sha": reviewed_base_sha,
+            "current_base_sha": live_base_sha,
+        }
+    reviewed_sha = reviewed_sha or live_head_sha
+    reviewed_base_sha = reviewed_base_sha or live_base_sha
+    expected_count = pr.get("changedFiles")
+    if frozen_inventory is None:
+        frozen_inventory = review_file_inventory(
+            repo,
+            candidate.number,
+            expected_count=expected_count,
+        )
+    elif not isinstance(expected_count, int) or len(frozen_inventory) != expected_count:
+        raise WorkflowError("Frozen review inventory does not match GitHub changed-file count")
     contract_markers = _linked_contract_markers(repo, str(pr.get("body") or ""))
     started = time.monotonic()
     result, ledger_path = _run_staged_readonly_agent(
@@ -751,17 +890,23 @@ def broker_review(
         sink="review-result",
         max_bytes=200_000,
     )
-    if set(response) - {"summary", "findings"}:
+    if set(response) - {"summary", "findings", "coverage"}:
         raise WorkflowError("Unexpected review response fields")
-    if not isinstance(response.get("summary"), str) or not isinstance(response.get("findings"), list):
-        raise WorkflowError("Review response requires summary and findings")
+    if (
+        not isinstance(response.get("summary"), str)
+        or not isinstance(response.get("findings"), list)
+        or not isinstance(response.get("coverage"), list)
+    ):
+        raise WorkflowError("Review response requires summary, findings, and coverage")
     findings = validate_findings(response["findings"])
+    coverage = validate_review_coverage(response["coverage"], frozen_inventory)
+    RunLedger(ledger_path).append({"type": "review_coverage", **coverage.to_dict()})
     for finding in findings:
         marker = finding.acceptance_criterion or finding.non_goal
         if marker not in contract_markers:
             raise WorkflowError(f"Finding {finding.finding_id} references unknown contract marker {marker}")
 
-    current = _json_command(["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,mergeable,mergeStateStatus"], cwd=repo.root)
+    current = _json_command(["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid,mergeable,mergeStateStatus"], cwd=repo.root)
     freshness = evidence_freshness(
         reviewed_sha,
         current["headRefOid"],
@@ -769,6 +914,14 @@ def broker_review(
     )
     if freshness.status != "current":
         return {"status": "stale", "role": "review", "candidate": vars(candidate), "freshness": vars(freshness)}
+    if current.get("baseRefOid") != reviewed_base_sha:
+        return {
+            "status": "stale",
+            "role": "review",
+            "candidate": vars(candidate),
+            "reviewed_base_sha": reviewed_base_sha,
+            "current_base_sha": current.get("baseRefOid"),
+        }
     checks_result = _run(["gh", "pr", "checks", str(candidate.number), "--repo", repo.slug, "--required", "--json", "bucket,name,state,link"], cwd=repo.root, check=False)
     try:
         checks = json.loads(checks_result.stdout) if checks_result.stdout.strip() else []
@@ -783,62 +936,195 @@ def broker_review(
         ci = "failed"
     else:
         ci = "required checks passed"
-    current = _json_command(["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,mergeable,mergeStateStatus"], cwd=repo.root)
-    if current["headRefOid"] != reviewed_sha:
+    current = _json_command(["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid,mergeable,mergeStateStatus"], cwd=repo.root)
+    if current["headRefOid"] != reviewed_sha or current.get("baseRefOid") != reviewed_base_sha:
         return {
             "status": "stale",
             "role": "review",
             "candidate": vars(candidate),
             "reviewed_sha": reviewed_sha,
             "current_sha": current["headRefOid"],
+            "reviewed_base_sha": reviewed_base_sha,
+            "current_base_sha": current.get("baseRefOid"),
         }
     mergeability = "clean" if str(current.get("mergeable", "")).upper() == "MERGEABLE" else "conflicting"
-    comment = format_review_comment(reviewed_sha, response["summary"], findings, ci, mergeability)
+    comment = format_review_comment(
+        reviewed_sha,
+        response["summary"],
+        findings,
+        ci,
+        mergeability,
+        coverage,
+        reviewed_base_sha,
+    )
     comment = prepare_sink(comment, sink="github-review-comment", max_bytes=60_000).text
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
         handle.write(comment)
         comment_path = Path(handle.name)
     try:
         comment_head = _json_command(
-            ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid"],
+            ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid"],
             cwd=repo.root,
         )
-        if comment_head.get("headRefOid") != reviewed_sha:
+        if (
+            comment_head.get("headRefOid") != reviewed_sha
+            or comment_head.get("baseRefOid") != reviewed_base_sha
+        ):
             return {
                 "status": "stale",
                 "role": "review",
                 "candidate": vars(candidate),
                 "reviewed_sha": reviewed_sha,
                 "current_sha": comment_head.get("headRefOid"),
+                "reviewed_base_sha": reviewed_base_sha,
+                "current_base_sha": comment_head.get("baseRefOid"),
             }
         _run(["gh", "pr", "comment", str(candidate.number), "--repo", repo.slug, "--body-file", str(comment_path)], cwd=repo.root)
     finally:
         comment_path.unlink(missing_ok=True)
+    if coverage.terminal_state != "complete":
+        before_label = _json_command(
+            ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid"],
+            cwd=repo.root,
+        )
+        if (
+            before_label.get("headRefOid") != reviewed_sha
+            or before_label.get("baseRefOid") != reviewed_base_sha
+        ):
+            return {
+                "status": "stale",
+                "role": "review",
+                "candidate": vars(candidate),
+                "reviewed_sha": reviewed_sha,
+                "current_sha": before_label.get("headRefOid"),
+                "reviewed_base_sha": reviewed_base_sha,
+                "current_base_sha": before_label.get("baseRefOid"),
+            }
+        _run(
+            [
+                "gh",
+                "pr",
+                "edit",
+                str(candidate.number),
+                "--repo",
+                repo.slug,
+                "--add-label",
+                "loop:awaiting-review",
+                "--remove-label",
+                "loop:approved",
+                "--remove-label",
+                "loop:changes-requested",
+            ],
+            cwd=repo.root,
+        )
+        after_label = _json_command(
+            ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid"],
+            cwd=repo.root,
+        )
+        if (
+            after_label.get("headRefOid") != reviewed_sha
+            or after_label.get("baseRefOid") != reviewed_base_sha
+        ):
+            # The comparison changed during the label edit. Keep the new
+            # comparison fail-closed and queued; never restore a stale verdict.
+            _run(
+                [
+                    "gh",
+                    "pr",
+                    "edit",
+                    str(candidate.number),
+                    "--repo",
+                    repo.slug,
+                    "--add-label",
+                    "loop:awaiting-review",
+                    "--remove-label",
+                    "loop:approved",
+                    "--remove-label",
+                    "loop:changes-requested",
+                ],
+                cwd=repo.root,
+            )
+            return {
+                "status": "stale",
+                "role": "review",
+                "candidate": vars(candidate),
+                "reviewed_sha": reviewed_sha,
+                "current_sha": after_label.get("headRefOid"),
+                "reviewed_base_sha": reviewed_base_sha,
+                "current_base_sha": after_label.get("baseRefOid"),
+            }
+        duration_ms = round((time.monotonic() - started) * 1000)
+        append_outcome(
+            git_metadata_path(repo.root, "templeton-loop/outcomes.jsonl"),
+            Outcome(
+                "review",
+                "runtime",
+                "configured-agent",
+                False,
+                duration_ms,
+                1,
+                failure_class=f"{coverage.terminal_state}-coverage",
+            ),
+        )
+        return {
+            "status": coverage.terminal_state,
+            "role": "review",
+            "candidate": vars(candidate),
+            "reviewed_sha": reviewed_sha,
+            "findings": [finding.to_dict() for finding in findings],
+            "coverage": coverage.to_dict(),
+            "ci": ci,
+            "mergeability": mergeability,
+            "duration_ms": duration_ms,
+            "ledger": str(ledger_path),
+        }
     must_fix = any(finding.disposition == "must-fix" for finding in findings)
     if must_fix or ci == "failed" or mergeability != "clean":
-        add, remove, verdict = "loop:changes-requested", "loop:approved", "changes-requested"
+        verdict = "changes-requested"
     elif ci != "required checks passed":
-        add, remove, verdict = "loop:needs-human-review", "loop:approved", "needs-human-review"
+        verdict = "needs-human-review"
     else:
-        add, remove, verdict = "loop:approved", "loop:changes-requested", "approved"
+        verdict = "approved"
+    add, remove_labels = _review_label_transition(verdict)
     before_label = _json_command(
-        ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid"],
+        ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid"],
         cwd=repo.root,
     )
-    if before_label["headRefOid"] != reviewed_sha:
+    if (
+        before_label["headRefOid"] != reviewed_sha
+        or before_label.get("baseRefOid") != reviewed_base_sha
+    ):
         return {
             "status": "stale",
             "role": "review",
             "candidate": vars(candidate),
             "reviewed_sha": reviewed_sha,
             "current_sha": before_label["headRefOid"],
+            "reviewed_base_sha": reviewed_base_sha,
+            "current_base_sha": before_label.get("baseRefOid"),
         }
-    _run(["gh", "pr", "edit", str(candidate.number), "--repo", repo.slug, "--add-label", add, "--remove-label", remove, "--remove-label", "loop:awaiting-review"], cwd=repo.root)
+    label_command = [
+        "gh",
+        "pr",
+        "edit",
+        str(candidate.number),
+        "--repo",
+        repo.slug,
+        "--add-label",
+        add,
+    ]
+    for label in remove_labels:
+        label_command.extend(["--remove-label", label])
+    label_command.extend(["--remove-label", "loop:awaiting-review"])
+    _run(label_command, cwd=repo.root)
     after_label = _json_command(
-        ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid"],
+        ["gh", "pr", "view", str(candidate.number), "--repo", repo.slug, "--json", "headRefOid,baseRefOid"],
         cwd=repo.root,
     )
-    if after_label.get("headRefOid") != reviewed_sha:
+    if (
+        after_label.get("headRefOid") != reviewed_sha
+        or after_label.get("baseRefOid") != reviewed_base_sha
+    ):
         _run(
             [
                 "gh",
@@ -860,6 +1146,8 @@ def broker_review(
             "candidate": vars(candidate),
             "reviewed_sha": reviewed_sha,
             "current_sha": after_label.get("headRefOid"),
+            "reviewed_base_sha": reviewed_base_sha,
+            "current_base_sha": after_label.get("baseRefOid"),
         }
     duration_ms = round((time.monotonic() - started) * 1000)
     append_outcome(
@@ -874,7 +1162,7 @@ def broker_review(
             failure_class=None if verdict == "approved" else verdict,
         ),
     )
-    return {"status": verdict, "role": "review", "candidate": vars(candidate), "reviewed_sha": reviewed_sha, "findings": [finding.to_dict() for finding in findings], "ci": ci, "mergeability": mergeability, "duration_ms": duration_ms, "ledger": str(ledger_path)}
+    return {"status": verdict, "role": "review", "candidate": vars(candidate), "reviewed_sha": reviewed_sha, "findings": [finding.to_dict() for finding in findings], "coverage": coverage.to_dict(), "ci": ci, "mergeability": mergeability, "duration_ms": duration_ms, "ledger": str(ledger_path)}
 
 
 def broker_qa(
