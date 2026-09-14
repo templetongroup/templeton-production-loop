@@ -105,6 +105,10 @@ def test_combined_skill_preserves_internal_role_separation(root: Path) -> None:
     assert "gh pr checks NUMBER --required" in exact_review
     assert "verdict=approved; coverage=complete" in exact_review
     assert "never targets the original source tree" in prove
+    assert "OpenClaw requires a dedicated `prove` agent" in prove
+    assert "workspace exactly equals `--run-root`" in prove
+    assert "completely empty" in prove
+    assert "--lint --agent templeton-prove" in prove
     assert "does not scaffold" in discovery
     assert "Require explicit operator confirmation" in discovery
     assert "Setup-only mode never scaffolds" in setup
