@@ -1,5 +1,7 @@
 # Matt Pocock productivity skills — selective incorporation
 
+> Historical selection record. The optional wrappers named below were removed in v1.2 and their selected procedures were consolidated into `skills/templeton-build/references/`.
+
 Date: 2026-08-14  
 Product: Templeton Production Loop  
 Upstream tree: https://github.com/mattpocock/skills/tree/main/skills/productivity  

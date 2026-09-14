@@ -166,7 +166,7 @@ def test_spec_commands_use_exact_report_only_policy_and_fresh_openclaw_session(t
     assert "--safe-mode" in hermes
     assert "todo" in hermes
     assert "terminal" not in hermes
-    assert "--skills" in hermes and "templeton-loop-spec" in hermes
+    assert "--skills" in hermes and "templeton-build" in hermes
 
     first = spec_agent_command(
         repo=repo,

@@ -1,5 +1,7 @@
 # Matt Pocock improve-codebase-architecture incorporation
 
+> Historical selection record. The optional wrapper and vendored skill source files named below were removed in v1.2; the current procedure lives under `skills/templeton-build/references/`.
+
 Date: 2026-08-14  
 Product: Templeton Production Loop  
 Upstream: https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture

@@ -10,5 +10,5 @@ This repository implements the Templeton Production Loop.
 - Strategy and worker model roles must remain explicit in plans and evidence: use the high-capability model for one bounded strategy pass, then route execution to the cheaper default worker model unless a task explicitly overrides it.
 - Add tests for changes to labels, candidate selection, SHA pinning, agent commands, locking, model routing, proof workspaces, verifier behavior, evidence writes, or safety gates.
 - Do not print or store credentials.
-- Optional helpers under `optional-skills/` are report-only and outside outer-loop authority; they must not apply `loop:agent-ready` or mutate GitHub/source state.
-- Selected optional productivity helpers (`templeton-grill`, `templeton-handoff`, `templeton-questionnaire`, `templeton-wait-what`, `templeton-writing-for-agents`) are operator-assist only.
+- `skills/templeton-build/` is the single operator-facing skill. Its internal references may share procedures, but brokered spec, plan-review, build, review, QA, status, and prove modes must retain their separate least-authority envelopes.
+- Discovery and setup references remain report-only when invoked as standalone stages; they must not apply `loop:agent-ready` or mutate GitHub/source state.

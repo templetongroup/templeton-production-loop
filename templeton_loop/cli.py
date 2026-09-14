@@ -756,6 +756,7 @@ def agent_command(
     else:
         raise LoopError(f"Unknown role: {role}")
     prompt = (
+        f'<templeton-build-broker schema="1" mode="{role}">\n'
         f"Run exactly one Templeton coding-loop {role} pass for {subject} in {repo.slug}. "
         "The current working directory is a disposable, secret-filtered source snapshot with no .git metadata. "
         "Read repository instructions and inspect the "
@@ -766,7 +767,7 @@ def agent_command(
         "GitHub labels/comments/branches/PRs, tests, and all external mutation. Never merge, enable "
         "auto-merge, deploy, publish, purchase, read credentials, contact other sessions, or mutate "
         "production. "
-        f"{output_contract}\n{context}"
+        f"{output_contract}\n{context}\n</templeton-build-broker>"
     )
     prompt = prepare_sink(prompt, sink="model-prompt", max_bytes=300_000).text
     if runtime == "hermes":
@@ -777,6 +778,8 @@ def agent_command(
             [
                 "chat",
                 *hermes_policy_args(role),
+                "--skills",
+                "templeton-build",
                 "--query",
                 prompt,
                 "--quiet",
@@ -951,9 +954,7 @@ def install_skills(
 ) -> dict[str, Any]:
     project_root = Path(__file__).resolve().parent.parent
     packaged = Path(__file__).resolve().parent / "resources" / "skills"
-    source = packaged if packaged.is_dir() else project_root / (
-        "skills-openclaw" if runtime == "openclaw" else "skills"
-    )
+    source = packaged if packaged.is_dir() else project_root / "skills"
     if not source.is_dir():
         raise LoopError(f"Skill source directory is missing: {source}")
 

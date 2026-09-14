@@ -40,12 +40,13 @@ def test_source_to_stage_parity_is_explicit(tmp_path: Path, monkeypatch: pytest.
         for source in sorted((ROOT / "templeton_loop").glob("*.py")):
             if source.name != "edition.py":
                 assert (stage / "templeton_loop" / source.name).read_bytes() == source.read_bytes()
-        skills = ROOT / ("skills" if runtime == "hermes" else "skills-openclaw")
+        skills = ROOT / "skills"
+        skill_destination = "skills-openclaw" if runtime == "openclaw" else "skills"
         for source in sorted(skills.rglob("*")):
             if not source.is_file():
                 continue
             relative = source.relative_to(skills)
-            assert (stage / skills.name / relative).read_bytes() == source.read_bytes()
+            assert (stage / skill_destination / relative).read_bytes() == source.read_bytes()
             packaged = stage / "templeton_loop" / "resources" / "skills" / relative
             assert packaged.read_bytes() == source.read_bytes()
 
@@ -61,8 +62,8 @@ def test_archives_are_reproducible_and_safe(tmp_path: Path, monkeypatch: pytest.
     assert builder.main() == 0
     assert not (dist / "exports.json").exists()
     assert {path.name for path in dist.glob("*.zip")} == {
-        "templeton-production-loop-hermes-v1.1.0.zip",
-        "templeton-production-loop-openclaw-v1.1.0.zip",
+        "templeton-production-loop-hermes-v1.2.0.zip",
+        "templeton-production-loop-openclaw-v1.2.0.zip",
     }
     before = {path.name: sha256(path) for path in dist.glob("*.zip")}
     assert builder.main() == 0
@@ -98,9 +99,9 @@ def test_matt_pocock_notice_is_preserved_in_both_editions_and_archives(
         "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
         "8b78b531ab965735c5dc74f6f7a219e1e37326df",
         "improve-codebase-architecture",
-        "optional-skills/templeton-*",
+        "templeton-build",
         "writing-for-agents",
-        "third_party/mattpocock-skills/productivity/",
+        "Upstream skill sources are not vendored",
         "teach",
         "Copyright (c) 2026 Matt Pocock",
         "Permission is hereby granted, free of charge",
@@ -109,11 +110,13 @@ def test_matt_pocock_notice_is_preserved_in_both_editions_and_archives(
         _name, stage = builder.stage_bundle(runtime)
         notice = (stage / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
         assert all(value in notice for value in required)
-        assert (stage / "optional-skills" / "templeton-architecture-review" / "SKILL.md").is_file()
-        assert (stage / "optional-skills" / "templeton-grill" / "SKILL.md").is_file()
-        assert (stage / "optional-skills" / "templeton-handoff" / "SKILL.md").is_file()
-        assert (stage / "third_party" / "mattpocock-skills" / "PINNED.md").is_file()
-        assert (stage / "third_party" / "mattpocock-skills" / "productivity" / "handoff" / "SKILL.md").is_file()
+        skill_root = stage / ("skills-openclaw" if runtime == "openclaw" else "skills")
+        assert (skill_root / "templeton-build" / "SKILL.md").is_file()
+        assert sorted(path.name for path in skill_root.iterdir() if path.is_dir()) == [
+            "templeton-build"
+        ]
+        assert not (stage / "optional-skills").exists()
+        assert not (stage / "third_party").exists()
 
     assert builder.main() == 0
     for archive in dist.glob("*.zip"):

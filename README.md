@@ -2,18 +2,24 @@
 
 Templeton Production Loop is a human-gated software delivery system for bounded GitHub changes and independently verified artifact work. It combines deterministic host-side control with least-authority model workers for Hermes Agent and OpenClaw.
 
-Version: **1.1.0**
+Version: **1.2.0**
 
 ## Editions
 
 The release generator produces two standalone runtime editions:
 
-- `templeton-production-loop-hermes` — Hermes roles plus the artifact proof runner.
-- `templeton-production-loop-openclaw` — OpenClaw-native production-loop roles plus live artifact proof execution through an explicit adapter and a dedicated empty one-shot workspace.
+- `templeton-production-loop-hermes` — one `templeton-build` skill plus the deterministic broker and artifact proof runner.
+- `templeton-production-loop-openclaw` — the same one-skill interface, OpenClaw-native broker adapters, and live artifact proof execution through a dedicated empty one-shot workspace.
 
 Each generated repository has a fixed runtime identity. Its installed CLI does not expose a runtime switch.
 
-## Operating model
+## One operator-facing build workflow
+
+Use `templeton-build` for a new app, feature, bug, refactor, review, or authorized release. Describe the result in plain English. The skill chooses the shortest safe lane, asks only material decisions, builds a real artifact, runs proof, uses a fresh independent reviewer for meaningful changes, repairs blockers, and reports the result.
+
+The deterministic Production Loop remains available for governed repository automation. Its spec, plan-review, build, review, QA, status, and prove modes are internal least-authority broker modes—not separate skills the operator must select or maintain.
+
+## Brokered operating model
 
 ```text
 idea
@@ -89,7 +95,7 @@ templeton-loop install-skills --agent AGENT_ID --apply
 
 Hermes uses a dedicated `HERMES_HOME` and Docker terminal policy. OpenClaw uses one explicit sandboxed agent per role. See the edition README and `SECURITY.md`; runtime preflight fails closed if required settings are absent or drifted.
 
-For a new project or material change, use the brokered `run spec` flow—never invoke the installed spec skill directly. The host reads current GitHub issue metadata and tracked repository files, combines them with a trusted brief/research file, rejects sensitive paths and secret-positive or oversized payloads, and then invokes the report-only role with the exact runtime policy. Each invocation performs one stateful interview turn, verifies runtime policy again, and scans the model result before preserving it under Git's `templeton-loop/spec/` metadata path (`.git/templeton-loop/spec/` in a normal checkout, or the linked worktree's administrative directory).
+For a governed new project or material change, use the brokered `run spec` flow. The host reads current GitHub issue metadata and tracked repository files, combines them with a trusted brief/research file, rejects sensitive paths and secret-positive or oversized payloads, and then invokes `templeton-build` in report-only spec mode with the exact runtime policy. Each invocation performs one stateful interview turn, verifies runtime policy again, and scans the model result before preserving it under Git's `templeton-loop/spec/` metadata path (`.git/templeton-loop/spec/` in a normal checkout, or the linked worktree's administrative directory).
 
 Spec state contains bounded, secret-filtered product context and interview history. It is mode-restricted, stays below `.git`, is excluded from source staging and release archives, and must still be handled as confidential local operator data.
 
@@ -110,7 +116,7 @@ templeton-loop run spec --repo /path/to/repo --session new-product --confirm
 
 Add `--profile templeton` in the Hermes edition or `--agent templeton-spec` in the OpenClaw edition. The final output is a sink-checked issue packet labeled only `loop:spec-draft`; the broker never files it. A trusted host may file that packet. Only the designated human operator may later apply `loop:agent-ready`.
 
-### 4. Preview a role pass
+### 4. Preview a broker pass
 
 ```bash
 # Hermes edition
@@ -181,8 +187,8 @@ shasum -a 256 -c SHA256SUMS       # macOS
 Validate staged bundles:
 
 ```bash
-python dist/stage/templeton-production-loop-hermes-v1.1.0/exports/validate_bundle.py
-python dist/stage/templeton-production-loop-openclaw-v1.1.0/exports/validate_bundle.py
+python dist/stage/templeton-production-loop-hermes-v1.2.0/exports/validate_bundle.py
+python dist/stage/templeton-production-loop-openclaw-v1.2.0/exports/validate_bundle.py
 ```
 
 The validator rejects missing, extra, altered, unsafe, or symlinked files and verifies `MANIFEST.json`, `MANIFEST.sha256`, version, runtime identity, skill inventory, and safety-contract markers. Internal manifests detect accidental or uncoordinated changes; they are not authenticity proofs. A `SHA256SUMS` file downloaded beside the archives is also insufficient unless its digest or signature was authenticated separately. For an authenticated repository checkout, you may additionally pin the externally reviewed manifest digest with `--expected-manifest-sha256 DIGEST`.
@@ -204,34 +210,14 @@ Inner Proof Runner graph authoring and post-pilot DAG primitives are documented 
 
 Use those patterns to sharpen task fan-out, independent lenses, and verifier anchors. They do not replace the outer GitHub/human-governance loop.
 
-## Optional architecture review
+## Skill structure
 
-For codebase deepening opportunities before filing work into the loop, use the optional report-only helper:
-
-- `optional-skills/templeton-architecture-review/SKILL.md`
-- vendored upstream sources: `third_party/mattpocock-skills/`
-- research note: `docs/research/2026-08-14-mattpocock-improve-codebase-architecture.md`
-
-This helper adapts Matt Pocock's MIT-licensed `improve-codebase-architecture` flow: scan hot spots, produce a temp HTML candidate report, grill one candidate, and return a `loop:spec-draft` issue packet for human filing. It is not one of the seven outer-loop authority roles and never applies `loop:agent-ready`, edits source, or mutates GitHub state.
-
-## Optional productivity helpers
-
-Selected Matt Pocock productivity skills are vendored and wrapped as optional operator helpers:
-
-- `optional-skills/templeton-grill` — one-question-at-a-time design interview
-- `optional-skills/templeton-handoff` — temp-dir secret-redacted session handoff
-- `optional-skills/templeton-questionnaire` — blocked-decision questionnaire for one recipient
-- `optional-skills/templeton-wait-what` — plain re-pitch when a status update did not land
-- `optional-skills/templeton-writing-for-agents` — agent-doc/skill writing guidance
-
-Upstream sources: `third_party/mattpocock-skills/productivity/`  
-Selection note: `docs/research/2026-08-14-mattpocock-productivity-selection.md`  
-Not incorporated: `teach` and any automatic agent-ready path.
+Each runtime edition ships exactly one skill directory: `templeton-build`. Discovery, project start, architecture, implementation, frontend quality, debugging, testing, independent review, QA, proof, GitHub, deployment, and handoff guidance live as internal references under that skill. The prior standalone role/helper skill directories and vendored upstream skill tree are intentionally removed.
 
 ## Governance and provenance
 
 Only the designated human operator applies `loop:agent-ready`. An authorized human may review the resulting PR and evidence and merge. Installation does not add hooks, automatic updates, cron jobs, deployments, or production credentials.
 
-Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. Its guided-interview behavior adapts bounded MIT-licensed concepts from Matt Pocock's `grill-me`, `grilling`, and `grill-with-docs` skills with attribution. Its optional architecture and selected productivity helpers adapt `improve-codebase-architecture`, `codebase-design`, `grill-me`/`grilling`, `handoff`, `to-questionnaire`, `wait-what`, and `writing-for-agents` under the same MIT attribution model. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. Alibaba Open Code Review was reviewed at a pinned Apache-2.0 commit as a conceptual source for independently written coverage and review-control requirements; its CLI, implementation, prompt prose, rules, and default exclusions are not included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
+Templeton Production Loop is MIT-licensed original Templeton work adapted from Alex Finn's MIT-licensed Finn-loop concepts. `templeton-build` adapts bounded MIT-licensed ideas from Matt Pocock's guided-interview, architecture, handoff, questionnaire, explanation, and agent-writing skills with attribution; upstream skill files are not vendored or installed. Ringer and gstack were reviewed as product/research inputs; no Ringer- or gstack-derived source, skill prose, templates, schemas, tests, or assets are included. Alibaba Open Code Review was reviewed at a pinned Apache-2.0 commit as a conceptual source for independently written coverage and review-control requirements; its CLI, implementation, prompt prose, rules, and default exclusions are not included. See `PROVENANCE.md` and `THIRD_PARTY_NOTICES.md` in generated editions.
 
 CLI and Python import names remain `templeton-loop` / `templeton_loop` for compatibility.
