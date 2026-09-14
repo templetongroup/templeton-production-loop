@@ -153,6 +153,142 @@ def validate_findings(values: Iterable[dict[str, Any]]) -> list[Finding]:
     return findings
 
 
+_ALLOWED_PR_FILE_STATUS = {
+    "added",
+    "changed",
+    "copied",
+    "modified",
+    "removed",
+    "renamed",
+    "unchanged",
+}
+_ALLOWED_REVIEW_OUTCOME = {"reviewed", "skipped"}
+
+
+def _validate_review_path(path: Any) -> str:
+    if (
+        not isinstance(path, str)
+        or not path
+        or path.startswith("/")
+        or "\\" in path
+        or any(ord(character) < 32 or ord(character) == 127 for character in path)
+    ):
+        raise EvidenceError(f"Invalid review coverage path: {path!r}")
+    parts = path.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise EvidenceError(f"Invalid review coverage path: {path!r}")
+    return path
+
+
+@dataclass(frozen=True)
+class ReviewCoverageItem:
+    path: str
+    status: str
+    outcome: str
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return redact(asdict(self))
+
+
+@dataclass(frozen=True)
+class ReviewCoverage:
+    selected: tuple[ReviewCoverageItem, ...]
+    reviewed: tuple[ReviewCoverageItem, ...]
+    skipped: tuple[ReviewCoverageItem, ...]
+    terminal_state: str
+
+    @property
+    def selected_count(self) -> int:
+        return len(self.selected)
+
+    @property
+    def reviewed_count(self) -> int:
+        return len(self.reviewed)
+
+    @property
+    def skipped_count(self) -> int:
+        return len(self.skipped)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "terminal_state": self.terminal_state,
+            "selected_count": self.selected_count,
+            "reviewed_count": self.reviewed_count,
+            "skipped_count": self.skipped_count,
+            "selected": [item.to_dict() for item in self.selected],
+            "reviewed": [item.to_dict() for item in self.reviewed],
+            "skipped": [item.to_dict() for item in self.skipped],
+        }
+
+
+def validate_review_coverage(
+    values: Iterable[dict[str, Any]],
+    inventory: Iterable[dict[str, Any]],
+) -> ReviewCoverage:
+    """Reconcile one model-produced review ledger against a frozen PR inventory."""
+
+    expected: dict[tuple[str, str], ReviewCoverageItem] = {}
+    for raw in inventory:
+        if not isinstance(raw, dict) or set(raw) != {"path", "status"}:
+            raise EvidenceError("Frozen review inventory entries require exactly path and status")
+        path = _validate_review_path(raw.get("path"))
+        status = raw.get("status")
+        if status not in _ALLOWED_PR_FILE_STATUS:
+            raise EvidenceError(f"Invalid review coverage status: {status!r}")
+        key = (path, status)
+        if key in expected:
+            raise EvidenceError(f"Duplicate frozen review inventory entry: {path} ({status})")
+        expected[key] = ReviewCoverageItem(path, status, "selected")
+
+    actual: dict[tuple[str, str], ReviewCoverageItem] = {}
+    for raw in values:
+        if not isinstance(raw, dict) or set(raw) - {"path", "status", "outcome", "reason"}:
+            raise EvidenceError("Review coverage entries contain unexpected fields")
+        path = _validate_review_path(raw.get("path"))
+        status = raw.get("status")
+        outcome = raw.get("outcome")
+        if status not in _ALLOWED_PR_FILE_STATUS:
+            raise EvidenceError(f"Invalid review coverage status: {status!r}")
+        if outcome not in _ALLOWED_REVIEW_OUTCOME:
+            raise EvidenceError(f"Invalid review coverage outcome: {outcome!r}")
+        reason_value = raw.get("reason")
+        if reason_value is not None and not isinstance(reason_value, str):
+            raise EvidenceError("Review coverage reason must be text")
+        reason = redact_text(reason_value or "").strip()
+        if outcome == "skipped" and not reason:
+            raise EvidenceError("Skipped review coverage entry requires a reason")
+        if outcome == "reviewed" and reason:
+            raise EvidenceError("Reviewed coverage entry must not include a reason")
+        key = (path, status)
+        if key in actual:
+            raise EvidenceError(f"Duplicate review coverage entry: {path} ({status})")
+        actual[key] = ReviewCoverageItem(path, status, outcome, reason or None)
+
+    if set(actual) != set(expected):
+        missing = sorted(set(expected) - set(actual))
+        extra = sorted(set(actual) - set(expected))
+        raise EvidenceError(
+            f"Review coverage does not match frozen inventory: missing={missing}, extra={extra}"
+        )
+
+    selected = tuple(expected[key] for key in sorted(expected))
+    reviewed = tuple(actual[key] for key in sorted(actual) if actual[key].outcome == "reviewed")
+    skipped = tuple(actual[key] for key in sorted(actual) if actual[key].outcome == "skipped")
+    if not selected:
+        terminal_state = "skipped"
+    elif skipped:
+        terminal_state = "partial"
+    else:
+        terminal_state = "complete"
+    return ReviewCoverage(
+        selected=selected,
+        reviewed=reviewed,
+        skipped=skipped,
+        terminal_state=terminal_state,
+    )
+
+
 @dataclass(frozen=True)
 class Freshness:
     status: str

@@ -45,7 +45,13 @@ from .specification import (
     spec_agent_command,
     validate_spec_response,
 )
-from .workflow import WorkflowError, broker_build, broker_qa, broker_review
+from .workflow import (
+    WorkflowError,
+    broker_build,
+    broker_qa,
+    broker_review,
+    review_file_inventory,
+)
 
 
 LABELS: dict[str, tuple[str, str]] = {
@@ -75,6 +81,10 @@ PRIORITY_LABELS = {
     "priority:low": 3,
 }
 REVIEW_PREFIX = "Templeton Loop review of "
+_REVIEW_STATE_RE = re.compile(
+    r"^Review-State: verdict=(approved|changes-requested|needs-human-review|awaiting-review); "
+    r"coverage=(complete|partial|skipped)$"
+)
 _LINKED_ISSUE_RE = re.compile(
     r"(?im)^\s*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?:https://github\.com/[^/\s]+/[^/\s]+/issues/)?#?(\d+)\b"
 )
@@ -99,6 +109,15 @@ class Candidate:
     url: str
     head_sha: str | None = None
     kind: str = "issue"
+    base_sha: str | None = None
+
+
+@dataclass(frozen=True)
+class FrozenCandidateContext:
+    text: str
+    head_sha: str | None = None
+    base_sha: str | None = None
+    review_inventory: tuple[dict[str, str], ...] = ()
 
 
 def _run(
@@ -182,17 +201,58 @@ def choose_build_issue(issues: Iterable[dict[str, Any]]) -> Candidate | None:
     return Candidate(chosen["number"], chosen["title"], chosen["url"])
 
 
-def latest_review_sha(comments: Iterable[dict[str, Any]]) -> str | None:
-    latest: tuple[str, str] | None = None
-    for comment in comments:
+def _latest_review_comment(
+    comments: Iterable[dict[str, Any]],
+    *,
+    trusted_author: str | None = None,
+) -> dict[str, Any] | None:
+    latest: tuple[str, int, dict[str, Any]] | None = None
+    for index, comment in enumerate(comments):
+        if trusted_author is not None:
+            user = comment.get("user")
+            author = user.get("login") if isinstance(user, dict) else None
+            if author != trusted_author:
+                continue
         first = (comment.get("body") or "").splitlines()[0].strip()
         if not first.startswith(REVIEW_PREFIX):
             continue
-        sha = first[len(REVIEW_PREFIX) :].strip().split()[0]
         created = comment.get("created_at") or comment.get("createdAt") or ""
-        if sha and (latest is None or created >= latest[0]):
-            latest = (created, sha)
-    return latest[1] if latest else None
+        if latest is None or (created, index) >= latest[:2]:
+            latest = (created, index, comment)
+    return latest[2] if latest else None
+
+
+def latest_review_sha(
+    comments: Iterable[dict[str, Any]], *, trusted_author: str | None = None
+) -> str | None:
+    comment = _latest_review_comment(comments, trusted_author=trusted_author)
+    if comment is None:
+        return None
+    first = (comment.get("body") or "").splitlines()[0].strip()
+    parts = first[len(REVIEW_PREFIX) :].strip().split()
+    return parts[0] if parts else None
+
+
+def latest_review_base_sha(
+    comments: Iterable[dict[str, Any]], *, trusted_author: str | None = None
+) -> str | None:
+    comment = _latest_review_comment(comments, trusted_author=trusted_author)
+    if comment is None:
+        return None
+    body = comment.get("body") or ""
+    first = body.splitlines()[0] if body else ""
+    remainder = first[len(REVIEW_PREFIX) :].strip()
+    return remainder.split(" against ", 1)[1].split()[0] if " against " in remainder else None
+
+
+def _review_comment_state(comment: dict[str, Any] | None) -> tuple[str, str] | None:
+    if comment is None:
+        return None
+    lines = str(comment.get("body") or "").splitlines()
+    if len(lines) < 2:
+        return None
+    match = _REVIEW_STATE_RE.fullmatch(lines[1].strip())
+    return (match.group(1), match.group(2)) if match else None
 
 
 def linked_issue_number(pr_body: str) -> int:
@@ -204,15 +264,73 @@ def linked_issue_number(pr_body: str) -> int:
     return next(iter(matches))
 
 
-def pr_needs_review(pr: dict[str, Any], comments: Iterable[dict[str, Any]]) -> bool:
+def bounded_github_context(
+    data: dict[str, Any],
+    *,
+    role: str,
+    repo_slug: str,
+    max_chars: int = 240_000,
+) -> str:
+    """Bound a GitHub payload without truncating its integrity envelope or scope manifest."""
+
+    provenance = {"source": "github", "role": role, "repo": repo_slug}
+    envelope = wrap_untrusted("github-context", data, provenance)
+    if len(envelope) <= max_chars:
+        return envelope
+
+    diff = data.get("diff")
+    if not isinstance(diff, str) or not diff:
+        raise LoopError("GitHub context metadata exceeds the model-context boundary")
+    reduced = dict(data)
+    overflow = len(envelope) - max_chars
+    reduced["diff"] = diff[: max(0, len(diff) - overflow - 1_024)]
+    reduced["diff_truncated"] = True
+    envelope = wrap_untrusted("github-context", reduced, provenance)
+    if len(envelope) > max_chars:
+        raise LoopError("GitHub context metadata exceeds the model-context boundary")
+    return envelope
+
+
+def pr_needs_review(
+    pr: dict[str, Any],
+    comments: Iterable[dict[str, Any]],
+    *,
+    trusted_author: str | None = None,
+) -> bool:
     if pr.get("isDraft"):
         return False
+    if not trusted_author:
+        return True
     current = pr.get("headRefOid")
     if not current:
         return True
-    reviewed = latest_review_sha(comments)
+    comments = list(comments)
+    review_comment = _latest_review_comment(comments, trusted_author=trusted_author)
+    reviewed = latest_review_sha(comments, trusted_author=trusted_author)
+    reviewed_base = latest_review_base_sha(comments, trusted_author=trusted_author)
+    current_base = pr.get("baseRefOid")
     names = label_names(pr)
-    return not (reviewed == current and bool(names & TERMINAL_REVIEW_LABELS))
+    comparison_matches = reviewed == current and (
+        not current_base or reviewed_base == current_base
+    )
+    if not comparison_matches:
+        return True
+    state = _review_comment_state(review_comment)
+    if state is None:
+        return True
+    verdict, coverage = state
+    if coverage != "complete" or verdict == "awaiting-review":
+        return True
+    expected_label = {
+        "approved": "loop:approved",
+        "changes-requested": "loop:changes-requested",
+        "needs-human-review": "loop:needs-human-review",
+    }.get(verdict)
+    if expected_label is None or expected_label not in names:
+        return True
+    automated_labels = {"loop:approved", "loop:changes-requested"}
+    incompatible = automated_labels - {expected_label}
+    return bool(names & incompatible)
 
 
 def list_issues(repo: Repo) -> list[dict[str, Any]]:
@@ -252,7 +370,7 @@ def list_prs(repo: Repo) -> list[dict[str, Any]]:
                 "--limit",
                 "100",
                 "--json",
-                "number,title,url,isDraft,headRefOid,updatedAt,labels",
+                "number,title,url,isDraft,headRefOid,baseRefOid,updatedAt,labels",
             ],
             cwd=repo.root,
         )
@@ -273,6 +391,14 @@ def pr_comments(repo: Repo, number: int) -> list[dict[str, Any]]:
         )
     )
     return [comment for page in pages for comment in page]
+
+
+def authenticated_github_actor(repo: Repo) -> str:
+    user = _json(_run(["gh", "api", "user"], cwd=repo.root))
+    login = user.get("login") if isinstance(user, dict) else None
+    if not isinstance(login, str) or not login:
+        raise LoopError("Could not resolve the authenticated GitHub broker actor")
+    return login
 
 
 def choose_repair_pr(prs: Iterable[dict[str, Any]]) -> Candidate | None:
@@ -296,13 +422,19 @@ def choose_repair_pr(prs: Iterable[dict[str, Any]]) -> Candidate | None:
         chosen["url"],
         head_sha=chosen.get("headRefOid"),
         kind="pr-repair",
+        base_sha=chosen.get("baseRefOid"),
     )
 
 
 def choose_review_pr(repo: Repo, prs: Iterable[dict[str, Any]] | None = None) -> Candidate | None:
+    trusted_author = authenticated_github_actor(repo)
     pending: list[dict[str, Any]] = []
     for pr in prs if prs is not None else list_prs(repo):
-        if pr_needs_review(pr, pr_comments(repo, pr["number"])):
+        if pr_needs_review(
+            pr,
+            pr_comments(repo, pr["number"]),
+            trusted_author=trusted_author,
+        ):
             pending.append(pr)
     if not pending:
         return None
@@ -314,6 +446,7 @@ def choose_review_pr(repo: Repo, prs: Iterable[dict[str, Any]] | None = None) ->
         chosen["url"],
         head_sha=chosen.get("headRefOid"),
         kind="pr-review",
+        base_sha=chosen.get("baseRefOid"),
     )
 
 
@@ -321,8 +454,14 @@ def build_candidate(repo: Repo) -> Candidate | None:
     return choose_repair_pr(list_prs(repo)) or choose_build_issue(list_issues(repo))
 
 
-def candidate_context(repo: Repo, candidate: Candidate, role: str) -> str:
-    """Return a bounded, explicitly untrusted GitHub data envelope for one child."""
+def freeze_candidate_context(
+    repo: Repo,
+    candidate: Candidate,
+    role: str,
+    *,
+    exact_comparison: bool = True,
+) -> FrozenCandidateContext:
+    """Freeze one bounded GitHub context and the exact PR comparison it represents."""
     if candidate.kind == "issue":
         data = _json(
             _run(
@@ -339,55 +478,149 @@ def candidate_context(repo: Repo, candidate: Candidate, role: str) -> str:
                 cwd=repo.root,
             )
         )
-    else:
-        data = _json(
-            _run(
-                [
-                    "gh",
-                    "pr",
-                    "view",
-                    str(candidate.number),
-                    "--repo",
-                    repo.slug,
-                    "--json",
-                    "number,title,body,url,headRefOid,baseRefName,files,comments,reviews",
-                ],
-                cwd=repo.root,
-            )
+        return FrozenCandidateContext(
+            bounded_github_context(data, role=role, repo_slug=repo.slug)
         )
-        diff = _run(
-            ["gh", "pr", "diff", str(candidate.number), "--repo", repo.slug],
+
+    data = _json(
+        _run(
+            [
+                "gh",
+                "pr",
+                "view",
+                str(candidate.number),
+                "--repo",
+                repo.slug,
+                "--json",
+                "number,title,body,url,headRefOid,baseRefOid,baseRefName,changedFiles,comments,reviews",
+            ],
+            cwd=repo.root,
+        )
+    )
+    head_sha = data.get("headRefOid")
+    base_sha = data.get("baseRefOid")
+    base_ref = data.get("baseRefName")
+    changed_files = data.get("changedFiles")
+    if (
+        not isinstance(head_sha, str)
+        or not head_sha
+        or not isinstance(base_sha, str)
+        or not base_sha
+        or not isinstance(base_ref, str)
+        or not base_ref
+    ):
+        raise LoopError("PR context is missing its head SHA, base SHA, or base ref")
+    if candidate.head_sha and candidate.head_sha != head_sha:
+        raise LoopError("PR head changed before review context could be frozen")
+    if candidate.base_sha and candidate.base_sha != base_sha:
+        raise LoopError("PR base changed before review context could be frozen")
+
+    if exact_comparison:
+        base_tracking_ref = f"refs/templeton-loop/review/{candidate.number}/base"
+        head_tracking_ref = f"refs/templeton-loop/review/{candidate.number}/head"
+        _run(["git", "check-ref-format", "--branch", base_ref], cwd=repo.root)
+        _run(
+            [
+                "git",
+                "fetch",
+                "--no-tags",
+                "--force",
+                repo.url,
+                f"+refs/heads/{base_ref}:{base_tracking_ref}",
+                f"+refs/pull/{candidate.number}/head:{head_tracking_ref}",
+            ],
             cwd=repo.root,
             timeout=300,
-        ).stdout
-        data["diff"] = diff[:200_000]
-        data["diff_truncated"] = len(diff) > 200_000
-        issue_number = linked_issue_number(str(data.get("body", "")))
-        issue_contract = _json(
-            _run(
-                [
-                    "gh",
-                    "issue",
-                    "view",
-                    str(issue_number),
-                    "--repo",
-                    repo.slug,
-                    "--json",
-                    "number,title,body,url,labels,comments",
-                ],
-                cwd=repo.root,
-            )
         )
-        data["issue_contract"] = issue_contract
-        data["linked_issues"] = [issue_contract]
-        contract_text = str(issue_contract.get("body") or "")
-        if not re.search(r"\bAC-\d+\b", contract_text):
-            raise LoopError("Linked issue contract must define at least one AC-N acceptance criterion")
-    return wrap_untrusted(
-        "github-context",
-        data,
-        {"source": "github", "role": role, "repo": repo.slug},
-    )[:240_000]
+        fetched_base = _run(
+            ["git", "rev-parse", "--verify", f"{base_tracking_ref}^{{commit}}"],
+            cwd=repo.root,
+        ).stdout.strip()
+        fetched_head = _run(
+            ["git", "rev-parse", "--verify", f"{head_tracking_ref}^{{commit}}"],
+            cwd=repo.root,
+        ).stdout.strip()
+        if fetched_base != base_sha or fetched_head != head_sha:
+            raise LoopError("Fetched PR refs do not match the frozen head/base comparison")
+
+    frozen_files = review_file_inventory(
+        repo,
+        candidate.number,
+        expected_count=changed_files,
+    )
+    data["review_scope"] = {
+        "head_sha": head_sha,
+        "base_sha": base_sha,
+        "selected_count": len(frozen_files),
+        "frozen_files": frozen_files,
+    }
+    diff_command = (
+        ["git", "diff", "--no-ext-diff", "--binary", f"{base_sha}...{head_sha}"]
+        if exact_comparison
+        else ["gh", "pr", "diff", str(candidate.number), "--repo", repo.slug]
+    )
+    diff = _run(diff_command, cwd=repo.root, timeout=300).stdout
+    data["diff"] = diff[:200_000]
+    data["diff_truncated"] = len(diff) > 200_000
+    issue_number = linked_issue_number(str(data.get("body", "")))
+    issue_contract = _json(
+        _run(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(issue_number),
+                "--repo",
+                repo.slug,
+                "--json",
+                "number,title,body,url,labels,comments",
+            ],
+            cwd=repo.root,
+        )
+    )
+    data["issue_contract"] = issue_contract
+    data["linked_issues"] = [issue_contract]
+    contract_text = str(issue_contract.get("body") or "")
+    if not re.search(r"\bAC-\d+\b", contract_text):
+        raise LoopError("Linked issue contract must define at least one AC-N acceptance criterion")
+
+    current = _json(
+        _run(
+            [
+                "gh",
+                "pr",
+                "view",
+                str(candidate.number),
+                "--repo",
+                repo.slug,
+                "--json",
+                "headRefOid,baseRefOid,changedFiles",
+            ],
+            cwd=repo.root,
+        )
+    )
+    if (
+        current.get("headRefOid") != head_sha
+        or current.get("baseRefOid") != base_sha
+        or current.get("changedFiles") != len(frozen_files)
+    ):
+        raise LoopError("PR comparison changed while review context was being frozen")
+    text = bounded_github_context(data, role=role, repo_slug=repo.slug)
+    if data["diff_truncated"] or '"diff_truncated":true' in text:
+        raise LoopError(
+            "PR diff exceeds the bounded review context; split the PR or use a dedicated reviewed batch"
+        )
+    return FrozenCandidateContext(
+        text,
+        head_sha=head_sha,
+        base_sha=base_sha,
+        review_inventory=tuple(frozen_files),
+    )
+
+
+def candidate_context(repo: Repo, candidate: Candidate, role: str) -> str:
+    """Return the text of one frozen, explicitly untrusted GitHub context."""
+    return freeze_candidate_context(repo, candidate, role).text
 
 
 def required_checks(repo: Repo) -> dict[str, Any]:
@@ -500,10 +733,29 @@ def agent_command(
             'object with schema="templeton.result.v1" and keys schema, status, summary, questions. '
             'status is ready, blocked, no-change, or needs-human. Use ready only after completing the edits.'
         )
-    elif role in {"review", "qa"}:
+    elif role == "review":
         subject = f"GitHub PR #{candidate.number} at head {candidate.head_sha or 'unknown'}"
         output_contract = (
-            "Return exactly one JSON object with summary and findings; QA may also include scenarios. "
+            "Perform a local diff pass for every frozen review-scope entry before targeted repository-context checks. "
+            "Route artifact-specific risks: CI workflows need permission and untrusted-event checks; dependency files need "
+            "source and lockfile consistency checks; schemas, IDL, and migrations need compatibility, reversibility, and "
+            "data-preservation checks; templates need output-encoding checks; config and i18n variants need parity checks. "
+            "For a substantial diff, partition every frozen entry into exactly one bounded primary semantic group, review "
+            "each group, then run one cross-group integration pass. Never exclude changed tests by default. "
+            "Recheck every candidate finding against the pinned diff and subject-file context, deduplicate by underlying "
+            "defect, and verify that any changed-code anchor exists in the pinned diff; use a file/contract-level location "
+            "rather than inventing a line. Drop unsupported or preference-only findings. "
+            "Return exactly one JSON object with summary, findings, and coverage. Coverage must contain exactly one entry "
+            "for every frozen (path,status) pair, with path, status, outcome=reviewed|skipped, and a concrete reason when "
+            "skipped. Do not silently omit a file. "
+            "Each finding must contain finding_id, severity, confidence, summary, failure_scenario, "
+            "evidence, fingerprint, disposition, and optional acceptance_criterion, non_goal, location. "
+            "Do not edit files or mutate GitHub state."
+        )
+    elif role == "qa":
+        subject = f"GitHub PR #{candidate.number} at head {candidate.head_sha or 'unknown'}"
+        output_contract = (
+            "Return exactly one JSON object with summary, findings, and optional scenarios. "
             "Each finding must contain finding_id, severity, confidence, summary, failure_scenario, "
             "evidence, fingerprint, disposition, and optional acceptance_criterion, non_goal, location. "
             "Do not edit files or mutate GitHub state."
@@ -617,7 +869,13 @@ def run_pass(
     candidate = build_candidate(repo) if role == "build" else choose_review_pr(repo)
     if candidate is None:
         return {"status": "idle", "role": role, "repo": repo.slug}
-    context = candidate_context(repo, candidate, role)
+    frozen_context = freeze_candidate_context(
+        repo,
+        candidate,
+        role,
+        exact_comparison=not dry_run,
+    )
+    context = frozen_context.text
     command = agent_command(
         repo=repo,
         role=role,
@@ -701,7 +959,12 @@ def run_pass(
     if role == "build":
         data = broker_build(**common)
     elif role == "review":
-        data = broker_review(**common)
+        data = broker_review(
+            **common,
+            reviewed_sha=frozen_context.head_sha,
+            reviewed_base_sha=frozen_context.base_sha,
+            frozen_inventory=list(frozen_context.review_inventory),
+        )
     elif role == "qa":
         data = broker_qa(**common)
     else:

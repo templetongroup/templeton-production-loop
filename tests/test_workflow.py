@@ -12,6 +12,7 @@ from templeton_loop.workflow import (
     LoopConfig,
     Verifier,
     WorkflowError,
+    _review_label_transition,
     _linked_issue_number,
     _stage_and_validate_patch,
     _linked_contract_markers,
@@ -21,6 +22,7 @@ from templeton_loop.workflow import (
     broker_review,
     extract_json_object,
     format_review_comment,
+    review_file_inventory,
     validate_builder_response,
     validate_changed_paths,
     verifier_container_command,
@@ -175,9 +177,19 @@ def test_review_comment_is_sha_pinned_and_never_claims_safe_with_findings():
         acceptance_criterion="AC-1",
     ).validate()
     comment = format_review_comment("abc123", "One issue.", [finding], "required checks passed", "clean")
-    assert comment.startswith("Templeton Loop review of abc123")
+    assert comment.startswith(
+        "Templeton Loop review of abc123\n"
+        "Review-State: verdict=awaiting-review; coverage=skipped"
+    )
     assert "Broken boundary" in comment
     assert "## Safe to merge\n\nNo." in comment
+
+
+def test_needs_human_transition_removes_both_automated_terminal_labels():
+    add, remove = _review_label_transition("needs-human-review")
+
+    assert add == "loop:needs-human-review"
+    assert set(remove) == {"loop:approved", "loop:changes-requested"}
 
 
 def test_linked_issue_contract_is_required_and_loaded(monkeypatch: pytest.MonkeyPatch):
@@ -323,10 +335,13 @@ def test_review_stale_head_before_label_never_applies_approval(
 ):
     head = "a" * 40
     newer = "b" * 40
+    base = "c" * 40
     pr_reads = 0
 
-    def json_command(args: list[str], **_kwargs: object) -> dict[str, object]:
+    def json_command(args: list[str], **_kwargs: object) -> object:
         nonlocal pr_reads
+        if args[1] == "api":
+            return [[{"filename": "src.py", "status": "modified"}]]
         if args[1:3] == ["issue", "view"]:
             return {"number": 1, "body": "AC-1: reviewed", "title": "Contract", "url": "u"}
         pr_reads += 1
@@ -337,11 +352,14 @@ def test_review_stale_head_before_label_never_applies_approval(
                 "body": "Closes #1",
                 "url": "u",
                 "headRefOid": head,
+                "baseRefOid": base,
+                "changedFiles": 1,
                 "mergeable": "MERGEABLE",
                 "mergeStateStatus": "CLEAN",
             }
         return {
             "headRefOid": newer if pr_reads == 4 else head,
+            "baseRefOid": base,
             "mergeable": "MERGEABLE",
             "mergeStateStatus": "CLEAN",
         }
@@ -358,7 +376,13 @@ def test_review_stale_head_before_label_never_applies_approval(
     monkeypatch.setattr(
         "templeton_loop.workflow._run_staged_readonly_agent",
         lambda **_kwargs: (
-            subprocess.CompletedProcess(["agent"], 0, '{"summary":"clean","findings":[]}', ""),
+            subprocess.CompletedProcess(
+                ["agent"],
+                0,
+                '{"summary":"clean","findings":[],"coverage":['
+                '{"path":"src.py","status":"modified","outcome":"reviewed"}]}',
+                "",
+            ),
             tmp_path / "events.jsonl",
         ),
     )
@@ -372,3 +396,186 @@ def test_review_stale_head_before_label_never_applies_approval(
     assert result["status"] == "stale"
     assert result["current_sha"] == newer
     assert not any(command[:3] == ["gh", "pr", "edit"] for command in commands)
+
+
+def test_review_partial_coverage_posts_evidence_but_no_terminal_label(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    head = "a" * 40
+    base = "c" * 40
+
+    def json_command(args: list[str], **_kwargs: object) -> object:
+        if args[1] == "api":
+            return [[
+                {"filename": "src.py", "status": "modified"},
+                {"filename": "tests/test_src.py", "status": "added"},
+            ]]
+        if args[1:3] == ["issue", "view"]:
+            return {"number": 1, "body": "AC-1: reviewed", "title": "Contract", "url": "u"}
+        return {
+            "number": 7,
+            "title": "PR",
+            "body": "Closes #1",
+            "url": "u",
+            "headRefOid": head,
+            "baseRefOid": base,
+            "changedFiles": 2,
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN",
+        }
+
+    commands: list[list[str]] = []
+    posted_comments: list[str] = []
+
+    def run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(args)
+        if args[1:3] == ["pr", "checks"]:
+            stdout = '[{"bucket":"pass","name":"tests","state":"SUCCESS","link":"u"}]'
+        else:
+            stdout = ""
+        if args[1:3] == ["pr", "comment"]:
+            posted_comments.append(Path(args[args.index("--body-file") + 1]).read_text())
+        return subprocess.CompletedProcess(args, 0, stdout, "")
+
+    response = {
+        "summary": "One file could not be reviewed.",
+        "findings": [],
+        "coverage": [
+            {"path": "src.py", "status": "modified", "outcome": "reviewed"},
+            {
+                "path": "tests/test_src.py",
+                "status": "added",
+                "outcome": "skipped",
+                "reason": "file could not be decoded",
+            },
+        ],
+    }
+    monkeypatch.setattr("templeton_loop.workflow._json_command", json_command)
+    monkeypatch.setattr("templeton_loop.workflow._run", run)
+    monkeypatch.setattr(
+        "templeton_loop.workflow._run_staged_readonly_agent",
+        lambda **_kwargs: (
+            subprocess.CompletedProcess(["agent"], 0, json.dumps(response), ""),
+            tmp_path / "events.jsonl",
+        ),
+    )
+
+    result = broker_review(
+        repo=SimpleNamespace(root=tmp_path, slug="owner/repo"),
+        candidate=SimpleNamespace(number=7, title="PR", url="u", head_sha=head, kind="pr-review"),
+        agent_command=["agent"],
+        timeout=60,
+        preflight=lambda _workspace: {"ok": True},
+    )
+
+    assert result["status"] == "partial"
+    assert result["coverage"]["terminal_state"] == "partial"
+    assert "partial: 1/2 files reviewed; 1 skipped" in posted_comments[0]
+    assert "file could not be decoded" in posted_comments[0]
+    label_edits = [command for command in commands if command[:3] == ["gh", "pr", "edit"]]
+    assert len(label_edits) == 1
+    label_edit = label_edits[0]
+    assert "loop:awaiting-review" in label_edit
+    assert "loop:approved" in label_edit
+    assert "loop:changes-requested" in label_edit
+    assert "loop:needs-human-review" not in label_edit
+
+
+def test_review_partial_coverage_race_returns_stale_and_keeps_new_comparison_queued(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    head = "a" * 40
+    newer = "b" * 40
+    base = "c" * 40
+    pr_reads = 0
+
+    def json_command(args: list[str], **_kwargs: object) -> object:
+        nonlocal pr_reads
+        if args[1] == "api":
+            return [[
+                {"filename": "src.py", "status": "modified"},
+                {"filename": "tests/test_src.py", "status": "added"},
+            ]]
+        if args[1:3] == ["issue", "view"]:
+            return {"number": 1, "body": "AC-1: reviewed", "title": "Contract", "url": "u"}
+        pr_reads += 1
+        return {
+            "number": 7,
+            "title": "PR",
+            "body": "Closes #1",
+            "url": "u",
+            "headRefOid": newer if pr_reads == 6 else head,
+            "baseRefOid": base,
+            "changedFiles": 2,
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN",
+        }
+
+    commands: list[list[str]] = []
+
+    def run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(args)
+        stdout = (
+            '[{"bucket":"pass","name":"tests","state":"SUCCESS","link":"u"}]'
+            if args[1:3] == ["pr", "checks"]
+            else ""
+        )
+        return subprocess.CompletedProcess(args, 0, stdout, "")
+
+    response = {
+        "summary": "One file could not be reviewed.",
+        "findings": [],
+        "coverage": [
+            {"path": "src.py", "status": "modified", "outcome": "reviewed"},
+            {
+                "path": "tests/test_src.py",
+                "status": "added",
+                "outcome": "skipped",
+                "reason": "file could not be decoded",
+            },
+        ],
+    }
+    monkeypatch.setattr("templeton_loop.workflow._json_command", json_command)
+    monkeypatch.setattr("templeton_loop.workflow._run", run)
+    monkeypatch.setattr(
+        "templeton_loop.workflow._run_staged_readonly_agent",
+        lambda **_kwargs: (
+            subprocess.CompletedProcess(["agent"], 0, json.dumps(response), ""),
+            tmp_path / "events.jsonl",
+        ),
+    )
+
+    result = broker_review(
+        repo=SimpleNamespace(root=tmp_path, slug="owner/repo"),
+        candidate=SimpleNamespace(number=7, title="PR", url="u", head_sha=head, kind="pr-review"),
+        agent_command=["agent"],
+        timeout=60,
+        preflight=lambda _workspace: {"ok": True},
+    )
+
+    assert result["status"] == "stale"
+    assert result["current_sha"] == newer
+    label_edits = [command for command in commands if command[:3] == ["gh", "pr", "edit"]]
+    assert len(label_edits) == 2
+    rollback = label_edits[-1]
+    assert "loop:awaiting-review" in rollback
+    assert "loop:approved" in rollback
+    assert "loop:changes-requested" in rollback
+
+
+def test_review_file_inventory_rejects_github_truncation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        "templeton_loop.workflow._json_command",
+        lambda *_args, **_kwargs: [[{"filename": "src.py", "status": "modified"}]],
+    )
+
+    with pytest.raises(WorkflowError, match="inventory is incomplete"):
+        review_file_inventory(
+            SimpleNamespace(root=tmp_path, slug="owner/repo"),
+            7,
+            expected_count=2,
+        )

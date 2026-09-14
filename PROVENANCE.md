@@ -33,6 +33,12 @@ Incorporation rules:
 - upstream `triage`, `implement`, `to-tickets`, setup plugins, hooks, and automatic agent-ready behavior are not included;
 - generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
 
+## Alibaba Open Code Review Concept Selection
+
+On 2026-09-14, the team reviewed Alibaba's Apache-2.0 `open-code-review` repository at pinned commit `6e5cd8cf2578768b6c6d1fafa1d14f66801d5f2b` together with the AACR-Bench paper (`arXiv:2601.19494`). Templeton independently implemented a frozen status-bearing PR file inventory, deterministic per-file coverage reconciliation, partial-review fail-closed behavior, local-then-targeted-context review, bounded semantic grouping, artifact-specific risk routing, and pinned-diff finding confirmation.
+
+No OCR source code, skill or prompt prose, templates, built-in rules, assets, model runner, installer, or default test exclusions were copied or included. The OCR CLI is not a dependency or merge gate. The full selection and rejection rationale is recorded in `docs/research/2026-09-14-alibaba-open-code-review-selection.md`.
+
 ## Proof Runner v1.0
 
 Before Proof Runner was implemented, the team evaluated Nate Jones Media LLC's Ringer project to understand the product category and licensing boundary. Ringer is distributed under PolyForm Shield 1.0.0, not an OSI-approved permissive license.
