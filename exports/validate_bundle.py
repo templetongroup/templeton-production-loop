@@ -17,15 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
-CORE_SKILLS = {
-    "templeton-loop-spec",
-    "templeton-loop-plan-review",
-    "templeton-loop-build",
-    "templeton-loop-review",
-    "templeton-loop-qa",
-    "templeton-loop-status",
-    "templeton-loop-prove",
-}
+CORE_SKILLS = {"templeton-build"}
 HERMES_SKILLS = CORE_SKILLS
 MANIFEST_NAMES = {"MANIFEST.json", "MANIFEST.sha256"}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -211,7 +203,6 @@ def validate_runtime(manifest: dict[str, Any]) -> tuple[str, set[str]]:
 
 def validate_skills(runtime: str, expected: set[str]) -> int:
     skill_root = ROOT / ("skills-openclaw" if runtime == "openclaw" else "skills")
-    combined: dict[str, str] = {}
     for name in sorted(expected):
         path = skill_root / name / "SKILL.md"
         text = path.read_text(encoding="utf-8")
@@ -222,7 +213,39 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
             fail(f"Frontmatter name mismatch: {path}")
         if not re.search(r"^description:\s*\S", frontmatter, re.MULTILINE):
             fail(f"Missing description: {path}")
-        combined[name] = text
+
+    skill_dir = skill_root / "templeton-build"
+    references = skill_dir / "references"
+    expected_references = {
+        "understand.md",
+        "discovery.md",
+        "setup.md",
+        "implementation.md",
+        "frontend.md",
+        "review-and-qa.md",
+        "release-and-handoff.md",
+        "broker-modes.md",
+        "spec.md",
+        "plan-review.md",
+        "build.md",
+        "review.md",
+        "qa.md",
+        "status.md",
+        "prove.md",
+    }
+    actual_references = {
+        path.name for path in references.iterdir() if path.is_file()
+    }
+    if actual_references != expected_references:
+        fail(
+            "Templeton Build reference inventory mismatch: "
+            f"expected {sorted(expected_references)}, got {sorted(actual_references)}"
+        )
+    main_skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    reference_text = {
+        name: (references / name).read_text(encoding="utf-8")
+        for name in expected_references
+    }
 
     shipped_markdown = "\n".join(
         path.read_text(encoding="utf-8") for path in sorted(ROOT.rglob("*.md"))
@@ -234,51 +257,66 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
     )
 
     checks = {
-        "spec human gate": "Never add `loop:agent-ready`" in combined["templeton-loop-spec"],
-        "spec one-question interview": (
-            "Ask exactly one decision question at a time" in combined["templeton-loop-spec"]
+        "single operator entry point": (
+            "One skill handles Templeton software work" in main_skill
+            and "plain English" in main_skill
         ),
-        "spec bounded research context": (
-            "bounded, secret-filtered repository and research context"
-            in combined["templeton-loop-spec"]
-            and "Use only that bounded context" in combined["templeton-loop-spec"]
+        "shortest safe lane": "Choose the shortest safe lane" in main_skill,
+        "one-question discovery": "Ask one decision at a time" in main_skill,
+        "no forced ceremony": "Do not force a questionnaire" in main_skill,
+        "day-zero report-only boundary": (
+            "does not scaffold" in reference_text["discovery.md"]
+            and "Require explicit operator confirmation" in reference_text["discovery.md"]
+            and "Setup-only mode never scaffolds" in reference_text["setup.md"]
         ),
-        "spec researched facts": (
-            "Look up facts inside the supplied context" in combined["templeton-loop-spec"]
+        "broker role separation": (
+            "least-authority tool envelope" in main_skill
+            and "One skill name is a simpler interface, not permission aggregation" in main_skill
         ),
-        "spec shared-understanding gate": (
-            "Do not create or update an issue at any point" in combined["templeton-loop-spec"]
-            and "shared understanding" in combined["templeton-loop-spec"]
+        "all broker modes": all(
+            f"`{mode}`" in main_skill
+            for mode in ("spec", "plan-review", "build", "review", "qa", "status", "prove")
         ),
-        "spec report-only issue packet": (
-            "Output an approved issue packet" in combined["templeton-loop-spec"]
-            and "never runs `gh`" in combined["templeton-loop-spec"]
+        "spec report only": "report-only role" in reference_text["spec.md"],
+        "spec broker only": (
+            '<templeton-spec-broker schema="1">' in reference_text["spec.md"]
+            and "Refuse direct invocation" in reference_text["spec.md"]
         ),
-        "spec Tony-only agent-ready": "Tony alone may apply" in combined["templeton-loop-spec"],
-        "spec broker-only invocation": (
-            '<templeton-spec-broker schema="1">' in combined["templeton-loop-spec"]
-            and "Refuse direct invocation" in combined["templeton-loop-spec"]
+        "spec one question": "Ask exactly one decision question at a time" in reference_text["spec.md"],
+        "spec Tony-only gate": "Tony alone may apply" in reference_text["spec.md"],
+        "plan review report only": "report-only" in reference_text["plan-review.md"].lower(),
+        "build no merge deploy": (
+            "Never merge, enable auto-merge, deploy" in reference_text["build.md"]
         ),
-        "plan review advisory": "report-only" in combined["templeton-loop-plan-review"].lower(),
-        "plan review Tony-only gate": "Tony alone owns approval" in combined["templeton-loop-plan-review"],
-        "build no merge/deploy": "Never merge, enable auto-merge, deploy" in combined["templeton-loop-build"],
-        "build retry cap": "at most two builder repair rounds" in combined["templeton-loop-build"],
-        "review required CI": "gh pr checks NUMBER --required" in combined["templeton-loop-review"],
-        "review no code push": "Never push code" in combined["templeton-loop-review"],
-        "review comparison pin": "Templeton Loop review of HEAD_SHA against BASE_SHA" in combined["templeton-loop-review"],
-        "qa report only": "report-only" in combined["templeton-loop-qa"].lower(),
-        "status read only": "never mutate" in combined["templeton-loop-status"].lower(),
+        "build retry cap": "at most two builder repair rounds" in reference_text["build.md"],
+        "review report only": "report-only" in reference_text["review.md"].lower(),
+        "review required CI": "gh pr checks NUMBER --required" in reference_text["review.md"],
+        "review comparison pin": (
+            "Templeton Loop review of HEAD_SHA against BASE_SHA"
+            in reference_text["review.md"]
+        ),
+        "review machine state": (
+            "Review-State: verdict=" in reference_text["review.md"]
+            and "verdict=approved; coverage=complete" in reference_text["review.md"]
+        ),
+        "review coverage reconciliation": (
+            "Reconcile totals programmatically" in reference_text["review-and-qa.md"]
+            and "partial coverage and cannot support approval" in reference_text["review-and-qa.md"]
+        ),
+        "qa report only": "report-only" in reference_text["qa.md"].lower(),
+        "status read only": "never mutate" in reference_text["status.md"].lower(),
+        "prove source immutable": "never targets the original source tree" in reference_text["prove.md"],
+        "prove no merge deploy": "Never merge, deploy" in reference_text["prove.md"],
+        "prove no hooks update": (
+            "auto-update" in reference_text["prove.md"].lower()
+            and "global hooks" in reference_text["prove.md"].lower()
+        ),
+        "human merge authority": "Final human merge authority is never delegated" in reference_text["review-and-qa.md"],
+        "no raw secrets": "Never expose credentials" in main_skill,
+        "real artifact completion": "requested artifact exists and was exercised" in main_skill,
+        "no optional skill tree": not (ROOT / "optional-skills").exists(),
+        "no vendored skill tree": not (ROOT / "third_party").exists(),
     }
-    prove = combined["templeton-loop-prove"]
-    checks.update(
-        {
-            "prove trusted plan": "trusted plan" in prove.lower(),
-            "prove no source edits": "never targets the original source tree" in prove,
-            "prove no merge/deploy": "Never merge, deploy" in prove,
-            "prove no hooks/update": "auto-update" in prove.lower() and "global hooks" in prove.lower(),
-            "prove provenance": "Ringer-derived code or assets" in prove,
-        }
-    )
     notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     checks.update(
         {
@@ -359,62 +397,9 @@ def validate_skills(runtime: str, expected: set[str]) -> int:
                 "spec role returns an issue packet" in agents
                 and "does not create issues or apply labels" in agents
             ),
-            "supported 1.1 security line": "1.1.x is the supported release line" in security,
+            "supported 1.2 security line": "1.2.x is the supported release line" in security,
         }
     )
-
-    optional_root = ROOT / "optional-skills"
-    expected_optional = {
-        "templeton-architecture-review",
-        "templeton-grill",
-        "templeton-handoff",
-        "templeton-questionnaire",
-        "templeton-wait-what",
-        "templeton-writing-for-agents",
-    }
-    if optional_root.is_dir():
-        actual_optional = {
-            path.name for path in optional_root.iterdir() if path.is_dir()
-        }
-        checks["optional skill inventory"] = expected_optional.issubset(actual_optional)
-        for name in sorted(expected_optional & actual_optional):
-            optional_text = (optional_root / name / "SKILL.md").read_text(encoding="utf-8")
-            prefix = f"optional {name}"
-            checks[f"{prefix} report-only"] = (
-                "report-only" in optional_text.lower() or "Optional" in optional_text
-            )
-            checks[f"{prefix} no agent-ready"] = (
-                "loop:agent-ready" in optional_text and "Never" in optional_text
-            )
-            checks[f"{prefix} outside core roles"] = (
-                "not one of the seven" in optional_text.lower()
-                or "outside" in optional_text.lower()
-                or "optional-helper" in optional_text
-            )
-            checks[f"{prefix} upstream pin"] = (
-                "8b78b531ab965735c5dc74f6f7a219e1e37326df" in optional_text
-            )
-    vendor_pin = ROOT / "third_party" / "mattpocock-skills" / "PINNED.md"
-    if vendor_pin.is_file():
-        pin_text = vendor_pin.read_text(encoding="utf-8")
-        checks["vendored mattpocock pin file"] = (
-            "8b78b531ab965735c5dc74f6f7a219e1e37326df" in pin_text
-        )
-        checks["vendored productivity selection"] = (
-            "skills/productivity/handoff" in pin_text
-            and "skills/productivity/teach" in pin_text
-        )
-    vendor_prod = ROOT / "third_party" / "mattpocock-skills" / "productivity"
-    if vendor_prod.is_dir():
-        checks["vendored productivity handoff"] = (
-            vendor_prod / "handoff" / "SKILL.md"
-        ).is_file()
-        checks["vendored productivity grilling"] = (
-            vendor_prod / "grilling" / "SKILL.md"
-        ).is_file()
-        checks["vendored productivity writing-for-agents"] = (
-            vendor_prod / "writing-for-agents" / "SKILL.md"
-        ).is_file()
 
     failed = [name for name, passed in checks.items() if not passed]
     if failed:

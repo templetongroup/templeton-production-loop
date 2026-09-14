@@ -4,28 +4,28 @@ All notable changes to Templeton Production Loop are documented here.
 
 ## Unreleased
 
+## 1.2.0 — 2026-09-14
+
 ### Added
-- Optional architecture helper adapted from Matt Pocock's `improve-codebase-architecture` + `codebase-design` (pinned `8b78b531ab965735c5dc74f6f7a219e1e37326df`):
-  - vendored sources in `third_party/mattpocock-skills/`
-  - Templeton-native report-only wrapper `optional-skills/templeton-architecture-review/`
-  - research note `docs/research/2026-08-14-mattpocock-improve-codebase-architecture.md`
-- Selected Matt Pocock productivity helpers (same pin), vendored under `third_party/mattpocock-skills/productivity/` with Templeton wrappers:
-  - `optional-skills/templeton-grill`
-  - `optional-skills/templeton-handoff`
-  - `optional-skills/templeton-questionnaire`
-  - `optional-skills/templeton-wait-what`
-  - `optional-skills/templeton-writing-for-agents`
-  - research note `docs/research/2026-08-14-mattpocock-productivity-selection.md`
-- Optional helpers are not part of the seven outer-loop authority roles and cannot apply `loop:agent-ready`. `teach` was evaluated and not incorporated.
+
+- One `templeton-build` skill for new products, features, bugs, refactors, reviews, QA, proof, handoffs, and authorized releases.
+- Internal references for guided understanding, project start, implementation, debugging, testing, frontend quality, independent review, broker modes, and release evidence.
+- `docs/research/2026-09-14-alibaba-open-code-review-selection.md` documenting the selective concept review and non-adoption boundary for Alibaba Open Code Review.
+- `docs/research/2026-08-14-graph-patterns-in-proof-runner.md` for inner Proof Runner graph patterns.
 
 ### Changed
+
+- The broker now preloads `templeton-build` for every Hermes spec/build/review/QA worker while preserving fresh contexts and role-specific least-authority policies.
 - Review runs now freeze a complete status-bearing PR file inventory, require one reconciled per-file outcome, record coverage in the ledger and GitHub comment, and refuse terminal labels for partial coverage.
 - Review context and publication are pinned to one head/base comparison; changed-file totals are independently reconciled, truncated contexts fail closed, and partial runs clear stale automated verdict labels while remaining queued.
 - Review comments now carry a fixed broker-authored `Review-State` record before model text. Queue scans authenticate the comment author and require the state's exact terminal label, so crashes, stale or conflicting labels, malformed state, and forged review-like comments fail closed and requeue.
-- Reviewer guidance now requires a local-diff pass before targeted repository context, coverage-preserving semantic groups for substantial diffs, artifact-specific risk routing, and pinned-diff confirmation of candidate findings. Changed tests remain in scope.
-- Added `docs/research/2026-09-14-alibaba-open-code-review-selection.md` documenting the selective concept review and non-adoption boundary for Alibaba Open Code Review.
-- Public product name is **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop`.
-- Added `docs/research/2026-08-14-graph-patterns-in-proof-runner.md` for inner Proof Runner graph patterns.
+- Reviewer guidance requires a local-diff pass before targeted repository context, coverage-preserving semantic groups for substantial diffs, artifact-specific risk routing, and pinned-diff confirmation of candidate findings. Changed tests remain in scope.
+- Public product name remains **Templeton Production Loop** (`templeton-production-loop`); CLI remains `templeton-loop` for compatibility.
+
+### Removed
+
+- The seven standalone `templeton-loop-*` skill directories from both runtime editions.
+- Six optional `templeton-*` helper skill directories and the vendored upstream skill tree. Their selected procedures are consolidated into `templeton-build`; attribution and pinned provenance remain.
 
 ## 1.1.0 — 2026-07-30
 

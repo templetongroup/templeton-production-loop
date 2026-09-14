@@ -1,6 +1,6 @@
 # Templeton Production Loop — OpenClaw Edition
 
-Version **1.1.0**. This standalone repository is fixed to OpenClaw; the CLI has no `--runtime` option. Its coding-loop roles and live `prove` command execute through explicit OpenClaw adapters. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
+Version **1.2.0**. This standalone repository is fixed to OpenClaw; the CLI has no `--runtime` option. Its coding-loop modes and live `prove` command execute through explicit OpenClaw adapters. Live proof requires a dedicated `prove` agent and an existing, empty, non-symlink one-shot workspace; preflight and post-preflight checks fail closed on policy mismatch or workspace mutation.
 
 ## Requirements
 
@@ -27,24 +27,16 @@ Run the validator before installation or tests create unmanifested build/cache f
 
 ## Install skills
 
-Install the bundled skills into each dedicated OpenClaw agent that needs them:
+Install the bundled skill into each dedicated OpenClaw agent that needs it:
 
 ```bash
 templeton-loop install-skills --agent AGENT_ID
 templeton-loop install-skills --agent AGENT_ID --apply
 ```
 
-Installed roles:
+This installs exactly one skill: `templeton-build`. Dedicated agents still keep separate role policies; one skill name does not combine authority.
 
-- `templeton-loop-spec`
-- `templeton-loop-plan-review`
-- `templeton-loop-build`
-- `templeton-loop-review`
-- `templeton-loop-qa`
-- `templeton-loop-status`
-- `templeton-loop-prove`
-
-For a new project or material change, use `templeton-loop run spec`; never invoke the installed spec skill directly. On the first turn, the broker prepares and secret-scans a bounded packet from current issue metadata, tracked repository guidance, the trusted host's brief/research file, and explicit `--include` files. Every turn creates a fresh OpenClaw session, verifies the explicit wildcard deny-all spec policy (`tools.deny: ["*"]`) and empty read-only workspace, preserves transcript state under Git's `templeton-loop/spec/` metadata path, and accepts one trusted-host answer through `--answer-file`. The child never gets research tools, GitHub mutation capability, deployment access, or arbitrary workspace reads.
+For a governed new project or material change, use `templeton-loop run spec`. On the first turn, the broker prepares and secret-scans a bounded packet from current issue metadata, tracked repository guidance, the trusted host's brief/research file, and explicit `--include` files. Every turn creates a fresh OpenClaw session, verifies the explicit wildcard deny-all spec policy (`tools.deny: ["*"]`) and empty read-only workspace, preserves transcript state under Git's `templeton-loop/spec/` metadata path, and accepts one trusted-host answer through `--answer-file`. The child never gets research tools, GitHub mutation capability, deployment access, or arbitrary workspace reads.
 
 The state file contains bounded product context and interview history. It is mode-restricted, excluded from source staging and release archives, and remains confidential local operator data.
 

@@ -1,5 +1,7 @@
 # Templeton Proof Runner v0.3 Implementation Plan
 
+> Historical plan. The standalone role skills named below were consolidated into `skills/templeton-build/references/` in v1.2; CLI mode names remain for compatibility.
+
 > **For Hermes:** Execute this plan directly in the existing repository with behavioral tests and independent spec/quality review.
 
 **Goal:** Add a portable verified-delegation runner that uses a high-capability Hermes model for strategy, hands the strategy to cheaper worker models for parallel execution, independently verifies outputs, retries bounded failures, and emits durable evidence.

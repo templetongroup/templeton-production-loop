@@ -266,7 +266,7 @@ def spec_agent_command(
                 "chat",
                 *hermes_policy_args("spec"),
                 "--skills",
-                "templeton-loop-spec",
+                "templeton-build",
                 "--query",
                 prompt,
                 "--quiet",

@@ -58,7 +58,7 @@ def test_generated_editions_are_fixed_installable_and_valid(staged_editions: dic
         assert f"EDITION: str | None = '{runtime}'" in edition
         project = (stage / "pyproject.toml").read_text(encoding="utf-8")
         assert f'name = "templeton-production-loop-{runtime}"' in project
-        assert 'version = "1.1.0"' in project
+        assert 'version = "1.2.0"' in project
 
     hermes_help = subprocess.run(
         [sys.executable, "-m", "templeton_loop.cli", "--help"],
@@ -223,7 +223,7 @@ def test_release_check_rejects_extra_nodes_symlinks_and_stage_drift(
         builder.check_outputs()
     builder.main()
 
-    archive = dist / "templeton-production-loop-hermes-v1.1.0.zip"
+    archive = dist / "templeton-production-loop-hermes-v1.2.0.zip"
     external = tmp_path / "external.zip"
     shutil.copyfile(archive, external)
     archive.unlink()

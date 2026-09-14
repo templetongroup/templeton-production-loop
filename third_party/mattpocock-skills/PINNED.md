@@ -1,33 +1,30 @@
-# Pinned Matt Pocock skills sources
+# Pinned Matt Pocock skill provenance
 
 Upstream: https://github.com/mattpocock/skills
 Tree pin: `8b78b531ab965735c5dc74f6f7a219e1e37326df`
 
-## Incorporated paths
+## Selected upstream paths
 
 ### Engineering
 - `skills/engineering/improve-codebase-architecture`
 - `skills/engineering/codebase-design`
 
-### Productivity (selected)
+### Productivity
 - `skills/productivity/grill-me`
 - `skills/productivity/grilling`
 - `skills/productivity/handoff`
 - `skills/productivity/to-questionnaire`
 - `skills/productivity/wait-what`
 - `skills/productivity/writing-for-agents`
-- `skills/productivity/README.md`
 
-## Not incorporated
-- `skills/productivity/teach` — multi-session teaching workspace product; outside Production Loop kernel
-- upstream setup plugins, triage/implement/to-tickets, and any automatic agent-ready path
+## Current repository treatment
 
-## Templeton wrappers
-- `optional-skills/templeton-architecture-review/`
-- `optional-skills/templeton-grill/`
-- `optional-skills/templeton-handoff/`
-- `optional-skills/templeton-questionnaire/`
-- `optional-skills/templeton-wait-what/`
-- `optional-skills/templeton-writing-for-agents/`
+The upstream skill source files and former `optional-skills/templeton-*` wrappers were removed in Templeton Production Loop v1.2 when their selected procedures were consolidated into `skills/templeton-build/references/`.
 
-Optional helpers are operator-assist / report-only. They are **not** outer-loop authority roles and cannot apply `loop:agent-ready`, merge, deploy, or mutate production.
+This directory now retains only compact provenance records:
+
+- upstream MIT `LICENSE`;
+- this exact commit/path record;
+- `UPSTREAM_FILES.json`, the historical source-file digest inventory.
+
+No skill in this directory is installed or exported. `teach`, setup plugins, triage/implement/to-tickets, and automatic agent-ready behavior remain excluded. The consolidated Templeton procedures cannot bypass broker role policies, human merge authority, or deployment approval.

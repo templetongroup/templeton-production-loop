@@ -1,6 +1,6 @@
 # Templeton Production Loop — Hermes Edition
 
-Version **1.1.0**. This standalone repository is fixed to Hermes; the CLI has no `--runtime` option.
+Version **1.2.0**. This standalone repository is fixed to Hermes; the CLI has no `--runtime` option.
 
 ## Requirements
 
@@ -66,17 +66,9 @@ templeton-loop install-skills --profile templeton
 templeton-loop install-skills --profile templeton --apply
 ```
 
-Installed roles:
+This installs exactly one operator-facing skill: `templeton-build`. Use it directly for ordinary software requests in plain English. The broker also loads the same skill in isolated, least-authority spec, plan-review, build, review, QA, status, and prove modes.
 
-- `templeton-loop-spec`
-- `templeton-loop-plan-review`
-- `templeton-loop-build`
-- `templeton-loop-review`
-- `templeton-loop-qa`
-- `templeton-loop-status`
-- `templeton-loop-prove`
-
-For a new project or material change, use `templeton-loop run spec`; never invoke the installed spec skill directly. On the first turn, the broker prepares and secret-scans a bounded packet from current issue metadata, tracked repository guidance, the trusted host's brief/research file, and explicit `--include` files. Every turn re-verifies the dedicated Hermes runtime, forces safe mode with only `todo`, preserves the interview transcript under Git's `templeton-loop/spec/` metadata path, and scans the structured result. The model cannot file the returned issue packet.
+For a governed new project or material change, use `templeton-loop run spec`. On the first turn, the broker prepares and secret-scans a bounded packet from current issue metadata, tracked repository guidance, the trusted host's brief/research file, and explicit `--include` files. Every turn re-verifies the dedicated Hermes runtime, forces safe mode with only `todo`, preserves the interview transcript under Git's `templeton-loop/spec/` metadata path, and scans the structured result. The model cannot file the returned issue packet.
 
 The state file contains bounded product context and interview history. It is mode-restricted, excluded from source staging and release archives, and remains confidential local operator data.
 

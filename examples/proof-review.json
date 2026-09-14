@@ -5,7 +5,7 @@
   "source_paths": [
     "README.md",
     "docs/plans/2026-07-23-proof-runner-v0.3.md",
-    "skills/templeton-loop-prove/SKILL.md"
+    "skills/templeton-build/references/broker-modes.md"
   ],
   "strategy": {
     "model": "anthropic/claude-opus-4.6",

@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 STAGE = DIST / "stage"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 RUNTIMES = ("hermes", "openclaw")
 
 
@@ -199,11 +199,9 @@ def stage_bundle(runtime: str) -> tuple[str, Path]:
     copy_tree(ROOT / "schemas", stage / "schemas")
     copy_tree(ROOT / "docs", stage / "docs")
     copy_tree(ROOT / "examples", stage / "examples")
-    copy_tree(ROOT / "optional-skills", stage / "optional-skills")
-    copy_tree(ROOT / "third_party", stage / "third_party")
     copy_tree(ROOT / "exports" / runtime, stage)
 
-    skill_source = ROOT / ("skills-openclaw" if runtime == "openclaw" else "skills")
+    skill_source = ROOT / "skills"
     skill_destination = stage / ("skills-openclaw" if runtime == "openclaw" else "skills")
     copy_tree(skill_source, skill_destination)
     copy_tree(skill_source, stage / "templeton_loop" / "resources" / "skills")
@@ -226,19 +224,14 @@ def stage_bundle(runtime: str) -> tuple[str, Path]:
         "# Third-Party Notices\n\n"
         "Templeton Production Loop is an MIT-licensed adaptation of Alex Finn's Finn-loop: "
         "https://github.com/finna/Finn-loop\n\n"
-        "The guided-interview behavior in `templeton-loop-spec` adapts concepts from "
-        "Matt Pocock's MIT-licensed `grill-me`, `grilling`, and `grill-with-docs` skills "
-        "at commit 2ab958093e83e0ec752e6c1c5932da465bf23e0c: "
-        "https://github.com/mattpocock/skills\n\n"
-        "The optional architecture helper adapts Matt Pocock's MIT-licensed "
-        "`improve-codebase-architecture` and `codebase-design` skills at commit "
-        "8b78b531ab965735c5dc74f6f7a219e1e37326df. Selected productivity skills "
-        "(`grill-me`/`grilling`, `handoff`, `to-questionnaire`, `wait-what`, "
-        "`writing-for-agents`) are vendored under "
-        "`third_party/mattpocock-skills/productivity/` and wrapped by "
-        "`optional-skills/templeton-*` helpers. They are not outer-loop authority "
-        "roles and do not auto-apply `loop:agent-ready`. The upstream `teach` skill "
-        "is intentionally not incorporated.\n\n"
+        "The `templeton-build` guided-understanding, architecture, and operator-assist "
+        "procedures adapt bounded concepts from Matt Pocock's MIT-licensed `grill-me`, "
+        "`grilling`, `grill-with-docs`, `improve-codebase-architecture`, `codebase-design`, "
+        "`handoff`, `to-questionnaire`, `wait-what`, and `writing-for-agents` skills at "
+        "commits 2ab958093e83e0ec752e6c1c5932da465bf23e0c and "
+        "8b78b531ab965735c5dc74f6f7a219e1e37326df: "
+        "https://github.com/mattpocock/skills. Upstream skill sources are not vendored "
+        "or installed, and the upstream `teach` skill is not incorporated.\n\n"
         "MIT License\n\n"
         "Copyright (c) 2026 Matt Pocock\n\n"
         "Permission is hereby granted, free of charge, to any person obtaining a copy "

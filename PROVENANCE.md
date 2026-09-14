@@ -4,34 +4,17 @@ Templeton Production Loop is original MIT-licensed work by The Templeton Group b
 
 ## Guided Interview
 
-On 2026-07-30, the team reviewed Matt Pocock's MIT-licensed `mattpocock/skills` repository at pinned commit `2ab958093e83e0ec752e6c1c5932da465bf23e0c`. Templeton Production Loop v1.1 adapts the bounded interaction model from `grill-me`, `grilling`, and `grill-with-docs`: the trusted host researches retrievable facts, the first-class `templeton-loop run spec` broker prepares and scans the bounded packet and digest-checked transcript, the report-only role asks one decision at a time with a recommendation, dependent choices are resolved in order, and explicit confirmed shared understanding is required before producing an issue packet.
+On 2026-07-30, the team reviewed Matt Pocock's MIT-licensed `mattpocock/skills` repository at pinned commit `2ab958093e83e0ec752e6c1c5932da465bf23e0c`. Templeton Production Loop adapts the bounded interaction model from `grill-me`, `grilling`, and `grill-with-docs`: the trusted host researches retrievable facts, the first-class `templeton-loop run spec` broker prepares and scans the bounded packet and digest-checked transcript, the report-only spec mode asks one decision at a time with a recommendation, dependent choices are resolved in order, and explicit confirmed shared understanding is required before producing an issue packet.
 
-The Templeton skill is independently expanded around trusted-host repository reconnaissance, secret-filtered context packets, per-turn runtime preflight, no-tools spec execution, issue-contract fields, Tony's GitHub approval gate, bounded issue size, deterministic sink checks, and the existing independent plan-review role. The spec role has no GitHub mutation phase. No upstream plugin, setup script, issue-tracker configuration, hooks, personal skills, or automatic update behavior is included. Generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
+The `templeton-build` skill is independently expanded around trusted-host repository reconnaissance, secret-filtered context packets, per-turn runtime preflight, no-tools spec execution, issue-contract fields, Tony's GitHub approval gate, bounded issue size, deterministic sink checks, and independent plan-review mode. The spec mode has no GitHub mutation phase. No upstream plugin, setup script, issue-tracker configuration, hooks, personal skills, or automatic update behavior is included. Generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
 
-## Selected Productivity Helpers (optional)
+## Consolidated Productivity and Architecture Procedures
 
-On 2026-08-14, selected Matt Pocock MIT-licensed productivity skills were incorporated from `mattpocock/skills` at pinned commit `8b78b531ab965735c5dc74f6f7a219e1e37326df`:
+On 2026-08-14, the team incorporated bounded concepts from Matt Pocock's MIT-licensed `mattpocock/skills` at pinned commit `8b78b531ab965735c5dc74f6f7a219e1e37326df`: `grill-me`, `grilling`, `handoff`, `to-questionnaire`, `wait-what`, `writing-for-agents`, `improve-codebase-architecture`, and `codebase-design`.
 
-- `grill-me` / `grilling` → `optional-skills/templeton-grill` (Templeton keeps one question at a time)
-- `handoff` → `optional-skills/templeton-handoff`
-- `to-questionnaire` → `optional-skills/templeton-questionnaire`
-- `wait-what` → `optional-skills/templeton-wait-what`
-- `writing-for-agents` → `optional-skills/templeton-writing-for-agents`
+In v1.2 these procedures live as internal references under the single `templeton-build` skill. The prior optional wrapper skills and vendored upstream skill source files were removed. The source repository retains only the upstream MIT license, exact pin/path record, and historical digest inventory under `third_party/mattpocock-skills/`; runtime exports omit that provenance directory and do not install upstream skills. Templeton's independently written procedures preserve one-question discovery, safe handoffs, explicit blocked decisions, plain-language re-pitching, agent-writing discipline, and deep-module architecture review without adding another operator-facing skill.
 
-Vendored under `third_party/mattpocock-skills/productivity/`. Not incorporated: `teach` and any upstream path that auto-applies agent-ready or bypasses human gates. These helpers are outside the seven core outer-loop authority roles.
-
-## Improve Codebase Architecture (optional helper)
-
-On 2026-08-14, the team incorporated Matt Pocock's MIT-licensed `improve-codebase-architecture` and supporting `codebase-design` vocabulary from `mattpocock/skills` at pinned commit `8b78b531ab965735c5dc74f6f7a219e1e37326df`.
-
-Incorporation rules:
-
-- upstream sources are vendored under `third_party/mattpocock-skills/` with file digests;
-- Templeton ships a report-only wrapper at `optional-skills/templeton-architecture-review/`;
-- the wrapper may draft a `loop:spec-draft` issue packet for human filing, but never mutates source, labels, branches, PRs, or production;
-- it is intentionally **outside** the seven core outer-loop authority roles and is not auto-installed into live Hermes/OpenClaw profiles by the loop CLI;
-- upstream `triage`, `implement`, `to-tickets`, setup plugins, hooks, and automatic agent-ready behavior are not included;
-- generated editions preserve Matt Pocock's copyright and MIT permission notice in `THIRD_PARTY_NOTICES.md`.
+The upstream `teach`, `triage`, `implement`, `to-tickets`, setup plugins, hooks, automatic agent-ready behavior, and any path that bypasses human gates are not incorporated. Generated editions retain attribution, exact source commits, Matt Pocock's copyright, and the MIT permission notice in `THIRD_PARTY_NOTICES.md`.
 
 ## Alibaba Open Code Review Concept Selection
 

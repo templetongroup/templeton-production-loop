@@ -238,6 +238,8 @@ def test_agent_command_is_air_gapped_terminal_only_and_contains_hard_gates():
     assert "GitHub issue #42" in joined
     assert "Never merge" in joined
     assert "--profile nikki" in joined
+    assert "--skills templeton-build" in joined
+    assert '<templeton-build-broker schema="1" mode="build">' in joined
 
 
 def test_review_command_pins_candidate_head_sha():

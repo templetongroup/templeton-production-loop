@@ -1,182 +1,131 @@
+from __future__ import annotations
+
+import re
 from pathlib import Path
 
+import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-CORE_SKILLS = {
+from templeton_loop.edition import EDITION
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILL_NAME = "templeton-build"
+REFERENCE_FILES = {
+    "understand.md",
+    "discovery.md",
+    "setup.md",
+    "implementation.md",
+    "frontend.md",
+    "review-and-qa.md",
+    "release-and-handoff.md",
+    "broker-modes.md",
+    "spec.md",
+    "plan-review.md",
+    "build.md",
+    "review.md",
+    "qa.md",
+    "status.md",
+    "prove.md",
+}
+FORBIDDEN_STANDALONE_SKILLS = {
     "templeton-loop-spec",
     "templeton-loop-plan-review",
     "templeton-loop-build",
     "templeton-loop-review",
     "templeton-loop-qa",
     "templeton-loop-status",
+    "templeton-loop-prove",
+    "templeton-architecture-review",
+    "templeton-grill",
+    "templeton-handoff",
+    "templeton-questionnaire",
+    "templeton-wait-what",
+    "templeton-writing-for-agents",
 }
-HERMES_SKILLS = CORE_SKILLS | {"templeton-loop-prove"}
-OPENCLAW_SKILLS = CORE_SKILLS | {"templeton-loop-prove"}
-RUNTIME_SKILLS = {
-    "skills": HERMES_SKILLS,
-    "skills-openclaw": OPENCLAW_SKILLS,
-}
 
 
-def present_runtime_skills() -> dict[str, set[str]]:
-    return {
-        folder: expected
-        for folder, expected in RUNTIME_SKILLS.items()
-        if (ROOT / folder).is_dir()
-    }
+def _skill_roots() -> tuple[Path, ...]:
+    roots = [ROOT / "skills", ROOT / "skills-openclaw"]
+    if EDITION == "hermes":
+        roots.append(ROOT / "templeton_loop" / "resources" / "skills")
+    return tuple(path for path in roots if path.exists())
 
 
-def test_skill_inventory_and_frontmatter():
-    for folder, expected in present_runtime_skills().items():
-        actual = {path.name for path in (ROOT / folder).iterdir() if path.is_dir()}
-        assert actual == expected
-        for name in expected:
-            text = (ROOT / folder / name / "SKILL.md").read_text()
-            assert text.startswith("---\n")
-            frontmatter = text.split("---\n", 2)[1]
-            assert f"name: {name}\n" in frontmatter
-            assert "description:" in frontmatter
-
-
-def test_human_gates_are_present_in_role_skills():
-    for folder in present_runtime_skills():
-        spec = (ROOT / folder / "templeton-loop-spec/SKILL.md").read_text()
-        build = (ROOT / folder / "templeton-loop-build/SKILL.md").read_text()
-        review = (ROOT / folder / "templeton-loop-review/SKILL.md").read_text()
-        assert "Never add `loop:agent-ready`" in spec
-        assert "Never merge, enable auto-merge, deploy" in build
-        assert "at most two builder repair rounds" in build
-        assert "gh pr checks NUMBER --required" in review
-        assert "No required CI means `loop:needs-human-review`" in review
-        assert "Never push code" in review
-        assert "Templeton Loop review of HEAD_SHA against BASE_SHA" in review
-        assert "frozen changed-file coverage manifest" in review
-        assert "semantic groups" in review
-        assert "artifact-specific" in review
-        assert "changed-code anchor" in review
-        plan_review = (ROOT / folder / "templeton-loop-plan-review/SKILL.md").read_text()
-        qa = (ROOT / folder / "templeton-loop-qa/SKILL.md").read_text()
-        assert "report-only" in plan_review.lower()
-        assert "Blocking User Decision" in plan_review
-        assert "report-only" in qa.lower()
-        assert "evidence freshness" in qa.lower()
-
-
-def test_spec_requires_guided_interview_before_issue_mutation():
-    required_contract = (
-        "Never run it unattended",
-        "bounded, secret-filtered repository and research context",
-        "Use only that bounded context",
-        "Look up facts inside the supplied context",
-        "Ask exactly one decision question at a time",
-        "provide the recommended answer first",
-        "Surface better options and new ideas",
-        "shared understanding",
-        "Do not create or update an issue at any point",
-        "Output an approved issue packet",
-        "Tony alone may apply",
-        "interview transcripts and chat are not hidden scope",
-    )
-    runtime_specs = []
-    for folder in present_runtime_skills():
-        spec = (ROOT / folder / "templeton-loop-spec/SKILL.md").read_text()
-        runtime_specs.append(spec)
-        for requirement in required_contract:
-            assert requirement in spec
-    assert len(set(runtime_specs)) == 1
-
-
-def test_openclaw_builder_requires_secret_filtered_staging():
-    if not (ROOT / "skills-openclaw").is_dir():
-        return
-    build = (ROOT / "skills-openclaw/templeton-loop-build/SKILL.md").read_text()
-    assert "stages a secret-filtered tree without `.git`" in build
-    assert "Children never receive GitHub credentials" in build
-    assert "deterministic host broker" in build
-
-
-def test_proof_skills_preserve_v1_boundaries():
-    for directory in ("skills", "skills-openclaw"):
-        if not (ROOT / directory).is_dir():
-            continue
-        prove = (ROOT / directory / "templeton-loop-prove/SKILL.md").read_text()
-        assert "trusted plan" in prove.lower()
-        assert "strategy" in prove.lower()
-        assert "model" in prove.lower()
-    assert "per-task" in prove.lower()
-    assert "source tree" in prove.lower()
-    assert "Never merge, deploy" in prove
-    assert "auto-update" in prove.lower()
-    assert "global hooks" in prove.lower()
-    assert "Ringer-derived code or assets" in prove
-
-
-def test_optional_architecture_review_is_report_only_and_outside_core_inventory():
-    optional = ROOT / "optional-skills" / "templeton-architecture-review" / "SKILL.md"
-    assert optional.is_file()
-    text = optional.read_text()
+def _frontmatter(text: str) -> str:
     assert text.startswith("---\n")
-    assert "name: templeton-architecture-review\n" in text
-    assert "report-only" in text.lower()
-    assert "loop:agent-ready" in text
-    assert "Never" in text
-    assert "edit source" in text
-    assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in text
-    # must not leak into core runtime skill inventories
-    for folder, expected in present_runtime_skills().items():
-        assert "templeton-architecture-review" not in expected
-        actual = {path.name for path in (ROOT / folder).iterdir() if path.is_dir()}
-        assert "templeton-architecture-review" not in actual
+    match = re.match(r"\A---\n(.*?)\n---\n", text, re.S)
+    assert match is not None
+    return match.group(1)
 
 
-def test_vendored_mattpocock_architecture_sources_are_pinned():
-    vendor = ROOT / "third_party" / "mattpocock-skills"
-    assert (vendor / "PINNED.md").is_file()
-    assert (vendor / "UPSTREAM_FILES.json").is_file()
-    assert (vendor / "improve-codebase-architecture" / "SKILL.md").is_file()
-    assert (vendor / "codebase-design" / "SKILL.md").is_file()
-    assert (vendor / "LICENSE").is_file()
-    pin = (vendor / "PINNED.md").read_text()
-    assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in pin
-    license_text = (vendor / "LICENSE").read_text()
-    assert "Copyright (c) 2026 Matt Pocock" in license_text
+@pytest.mark.parametrize("root", _skill_roots(), ids=lambda path: path.as_posix())
+def test_exactly_one_templeton_build_skill_is_shipped(root: Path) -> None:
+    directories = sorted(path.name for path in root.iterdir() if path.is_dir())
+    assert directories == [SKILL_NAME]
+
+    skill_dir = root / SKILL_NAME
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter = _frontmatter(text)
+    assert re.search(r"^name:\s*templeton-build\s*$", frontmatter, re.M)
+    assert "description:" in frontmatter
+    assert "Use when" in frontmatter
+
+    references = skill_dir / "references"
+    reference_paths = [path for path in references.iterdir() if path.is_file()]
+    assert {path.name for path in reference_paths} == REFERENCE_FILES
+    assert all(not path.read_text(encoding="utf-8").startswith("---\n") for path in reference_paths)
 
 
-def test_optional_productivity_helpers_are_outside_core_inventory_and_gated():
-    expected = {
-        "templeton-architecture-review",
-        "templeton-grill",
-        "templeton-handoff",
-        "templeton-questionnaire",
-        "templeton-wait-what",
-        "templeton-writing-for-agents",
-    }
-    optional_root = ROOT / "optional-skills"
-    actual = {path.name for path in optional_root.iterdir() if path.is_dir()}
-    assert expected.issubset(actual)
-    for name in sorted(expected):
-        text = (optional_root / name / "SKILL.md").read_text()
-        assert text.startswith("---\n")
-        assert f"name: {name}\n" in text
-        assert "loop:agent-ready" in text
-        assert "Never" in text
-        assert "8b78b531ab965735c5dc74f6f7a219e1e37326df" in text
-    for folder, core in present_runtime_skills().items():
-        assert expected.isdisjoint(core)
-        actual_core = {path.name for path in (ROOT / folder).iterdir() if path.is_dir()}
-        assert expected.isdisjoint(actual_core)
+@pytest.mark.parametrize("root", _skill_roots(), ids=lambda path: path.as_posix())
+def test_combined_skill_preserves_internal_role_separation(root: Path) -> None:
+    skill_dir = root / SKILL_NAME
+    main = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    modes = (skill_dir / "references" / "broker-modes.md").read_text(encoding="utf-8")
+    review = (skill_dir / "references" / "review-and-qa.md").read_text(encoding="utf-8")
+
+    for mode in ("spec", "plan-review", "build", "review", "qa", "status", "prove"):
+        assert f"`{mode}`" in main
+    assert "One skill name is a simpler interface, not permission aggregation" in main
+    assert "Never combine worker authority" in modes
+    assert "The reviewer is report-only and cannot edit code" in review
+    assert "Templeton Loop review of HEAD_SHA against BASE_SHA" in review
+    assert "Review-State: verdict=<approved|changes-requested|needs-human-review|awaiting-review>" in review
+    assert "partial coverage and cannot support approval" in review
+    assert "reconcile totals programmatically" in review.lower()
+
+    exact_review = (skill_dir / "references" / "review.md").read_text(encoding="utf-8")
+    build = (skill_dir / "references" / "build.md").read_text(encoding="utf-8")
+    spec = (skill_dir / "references" / "spec.md").read_text(encoding="utf-8")
+    prove = (skill_dir / "references" / "prove.md").read_text(encoding="utf-8")
+    discovery = (skill_dir / "references" / "discovery.md").read_text(encoding="utf-8")
+    setup = (skill_dir / "references" / "setup.md").read_text(encoding="utf-8")
+    assert 'templeton-spec-broker schema="1"' in spec
+    assert "Tony alone may apply" in spec
+    assert "at most two builder repair rounds" in build
+    assert "gh pr checks NUMBER --required" in exact_review
+    assert "verdict=approved; coverage=complete" in exact_review
+    assert "never targets the original source tree" in prove
+    assert "does not scaffold" in discovery
+    assert "Require explicit operator confirmation" in discovery
+    assert "Setup-only mode never scaffolds" in setup
 
 
-def test_vendored_mattpocock_productivity_selection_excludes_teach():
-    vendor = ROOT / "third_party" / "mattpocock-skills"
-    pin = (vendor / "PINNED.md").read_text()
-    assert "skills/productivity/handoff" in pin
-    assert "skills/productivity/teach" in pin  # listed as not incorporated
-    assert "Not incorporated" in pin
-    assert (vendor / "productivity" / "handoff" / "SKILL.md").is_file()
-    assert (vendor / "productivity" / "grilling" / "SKILL.md").is_file()
-    assert (vendor / "productivity" / "writing-for-agents" / "SKILL.md").is_file()
-    assert not (vendor / "productivity" / "teach").exists()
-    # Templeton grill remains one-at-a-time
-    grill = (ROOT / "optional-skills" / "templeton-grill" / "SKILL.md").read_text()
-    assert "one decision question at a time" in grill.lower() or "one question at a time" in grill.lower()
+def test_superseded_standalone_skill_directories_are_absent() -> None:
+    for parent in (ROOT / "skills", ROOT / "skills-openclaw"):
+        if not parent.exists():
+            continue
+        names = {path.name for path in parent.iterdir() if path.is_dir()}
+        assert names.isdisjoint(FORBIDDEN_STANDALONE_SKILLS)
+    assert not (ROOT / "optional-skills").exists()
+    third_party = ROOT / "third_party"
+    if third_party.exists():
+        assert not list(third_party.rglob("SKILL.md"))
+
+
+def test_combined_skill_has_direct_operator_workflow() -> None:
+    root = _skill_roots()[0]
+    text = (root / SKILL_NAME / "SKILL.md").read_text(encoding="utf-8")
+    assert "The operator describes the outcome in plain English" in text
+    assert "Do not force a questionnaire, project seed, GitHub issue" in text
+    assert "fresh independent reviewer" in text
+    assert "Done means the requested artifact exists and was exercised" in text
